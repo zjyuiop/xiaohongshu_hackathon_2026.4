@@ -234,7 +234,7 @@ function App() {
           </button>
           {!leftCollapsed && (
             <>
-              <span className="section-label" style={{ flex: 1 }}>角色</span>
+              <span className="section-label" style={{ flex: 1 }}>角色库</span>
               <button
                 className="add-btn"
                 onClick={() => setShowImportForm((v) => !v)}
@@ -440,13 +440,11 @@ function SourcePanel({
                 onClick={() => onSelectProfile(p)}
               >
                 <span className={`role-dot ${p.id.startsWith('custom-') ? 'custom' : ''} ${loaded ? 'loaded' : ''}`} />
-                <div style={{ flex: 1 }}>
+                <div style={{ flex: 1, textAlign: 'left' }}>
                   <span className="role-name">{p.displayName}</span>
                   <span className="role-sub">{p.subtitle}</span>
                 </div>
-                {loaded && (
-                  <span className="expand-arrow">{expanded ? '▾' : '▸'}</span>
-                )}
+                <span className="expand-arrow">{loaded ? (expanded ? '▾' : '▸') : '›'}</span>
               </button>
 
               {/* Inline timeline nodes (visible when expanded) */}
@@ -506,7 +504,6 @@ function CouncilStage({
 }) {
   return (
     <>
-      <p className="section-label">议会 / Council</p>
 
       <h1 className="center-title">时序人格局</h1>
       <p className="center-subtitle">
@@ -609,43 +606,44 @@ function ExportPanel({
     <>
       {arenaResult ? (
         <>
+          <div className="section-title">输出与扩展</div>
           <div className="summary-card">
             <h4>{arenaResult.summary.title}</h4>
-            <p>{arenaResult.summary.consensus}</p>
+            <div className="quote-highlight">"{arenaResult.summary.consensus}"</div>
+          </div>
 
-            <div className="summary-sub">
-              <p className="summary-sub-title">主要分歧</p>
-              <ul>
-                {arenaResult.summary.disagreements.map((d) => (
-                  <li key={d}>{d}</li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="summary-sub">
-              <p className="summary-sub-title">行动建议</p>
-              <ul>
-                {arenaResult.summary.actionableAdvice.map((a) => (
-                  <li key={a}>{a}</li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="quote-highlight">
-              "{arenaResult.summary.narrativeHook}"
+          <div className="export-section">
+            <h4 className="export-title">导出选项</h4>
+            <div className="export-btns">
+              <button className="export-btn" onClick={() => {
+                const text = `【${arenaResult.summary.title}】\n\n共识：${arenaResult.summary.consensus}\n\n分歧：\n${arenaResult.summary.disagreements.join('\n')}\n\n建议：\n${arenaResult.summary.actionableAdvice.join('\n')}`
+                navigator.clipboard.writeText(text).then(() => alert('已复制到剪贴板'))
+              }}>
+                <span className="export-icon">📄</span> <div style={{textAlign: 'left'}}><span style={{fontWeight: 600}}>对话文本</span><br/><span style={{fontSize: '0.75rem', opacity: 0.7}}>导出为 TXT 格式</span></div>
+              </button>
+              <button className="export-btn" onClick={() => alert('全息海报接口')}>
+                <span className="export-icon" style={{color: '#c290ff', background: '#f5edff'}}>⬇️</span> <div style={{textAlign: 'left'}}><span style={{fontWeight: 600}}>全息海报</span><br/><span style={{fontSize: '0.75rem', opacity: 0.7}}>生成可视化海报</span></div>
+              </button>
+              <button className="export-btn" onClick={() => alert('分享链接接口')}>
+                <span className="export-icon" style={{color: '#659fff', background: '#edf4ff'}}>🔗</span> <div style={{textAlign: 'left'}}><span style={{fontWeight: 600}}>分享链接</span><br/><span style={{fontSize: '0.75rem', opacity: 0.7}}>生成分享链接</span></div>
+              </button>
             </div>
           </div>
 
-          <div className="export-btns">
-            <button className="btn-primary" onClick={() => alert('导出人格议会海报（预留接口）')}>
-              全息海报导出
-            </button>
-            <button className="btn-ghost" onClick={() => {
-              const text = `【${arenaResult.summary.title}】\n\n共识：${arenaResult.summary.consensus}\n\n分歧：\n${arenaResult.summary.disagreements.join('\n')}\n\n建议：\n${arenaResult.summary.actionableAdvice.join('\n')}`
-              navigator.clipboard.writeText(text).then(() => alert('已复制到剪贴板'))
-            }}>
-              复制纪要文本
-            </button>
+          <div className="stats-section">
+            <h4 className="export-title">会话统计</h4>
+            <div className="stat-row">
+              <span>对话轮次</span>
+              <span className="stat-val">{Math.ceil(arenaResult.messages.length / 2)}</span>
+            </div>
+            <div className="stat-row">
+              <span>总字数</span>
+              <span className="stat-val">{arenaResult.messages.reduce((acc, m) => acc + m.content.length, 0)}</span>
+            </div>
+            <div className="stat-row">
+              <span>耗时</span>
+              <span className="stat-val">3s</span>
+            </div>
           </div>
         </>
       ) : (
