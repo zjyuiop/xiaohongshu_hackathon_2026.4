@@ -220,7 +220,7 @@ function App() {
   return (
     <div
       className="app-shell"
-      style={{ gridTemplateColumns: `${leftCol} 1px 1fr 1px ${rightCol}` }}
+      style={{ gridTemplateColumns: `${leftCol} 16px 1fr 16px ${rightCol}` }}
     >
       {/* ═══ LEFT ═══ */}
       <div className={`col col-left ${leftCollapsed ? 'collapsed' : ''}`}>

@@ -37,7 +37,6 @@
   /* grid-template-columns set by inline style for resizable columns */
   height: 100vh;
   padding: 16px;
-  gap: 16px;
   box-sizing: border-box;
   background: var(--bg-deep);
   color: var(--ink);
@@ -58,25 +57,28 @@
 /* ─── Drag Dividers ─── */
 
 .divider-handle {
-  width: 1px;
-  background: var(--glass-border);
+  width: 16px;
+  background: transparent;
   position: relative;
   cursor: col-resize;
   z-index: 20;
-  transition: background 0.15s;
 }
 
 .divider-handle::after {
   content: '';
   position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -4px;
-  width: 9px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 4px;
+  height: 32px;
+  border-radius: 4px;
+  background: var(--glass-border);
   z-index: 21;
+  transition: background 0.15s;
 }
 
-.divider-handle:hover {
+.divider-handle:hover::after {
   background: var(--cyan);
   box-shadow: 0 0 8px var(--cyan-glow);
 }
