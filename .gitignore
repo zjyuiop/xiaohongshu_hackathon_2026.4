@@ -1,0 +1,10 @@
+web/node_modules/
+web/dist/
+backend/node_modules/
+backend/dist/
+backend/.env
+harmony/oh_modules/
+harmony/.hvigor/
+harmony/.idea/
+harmony/local.properties
+.DS_Store

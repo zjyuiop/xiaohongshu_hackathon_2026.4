@@ -1,0 +1,16 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "时序人格局 HarmonyOS 模块"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "跨阶段人格议会 Demo"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "时序人格局"
+    }
+  ]
+}
