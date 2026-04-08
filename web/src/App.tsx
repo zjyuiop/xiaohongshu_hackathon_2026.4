@@ -274,6 +274,7 @@ function App() {
       <div className="col col-center">
         <CouncilStage
           selectedAgents={selectedAgents}
+          onToggleAgent={toggleAgent}
           topic={topic}
           setTopic={setTopic}
           arenaMode={arenaMode}
@@ -482,6 +483,7 @@ function SourcePanel({
 
 function CouncilStage({
   selectedAgents,
+  onToggleAgent,
   topic,
   setTopic,
   arenaMode,
@@ -492,6 +494,7 @@ function CouncilStage({
   onRun,
 }: {
   selectedAgents: PersonaSpec[]
+  onToggleAgent: (id: string) => void
   topic: string
   setTopic: (v: string) => void
   arenaMode: ArenaMode
@@ -520,6 +523,13 @@ function CouncilStage({
               <span className="dot" />
               <span>{a.displayName}</span>
               <span className="chip-time">{a.timeLabel}</span>
+              <button
+                className="chip-remove"
+                onClick={() => onToggleAgent(a.agentId)}
+                title="移除"
+              >
+                ×
+              </button>
             </div>
           ))}
         </div>

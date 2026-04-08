@@ -469,10 +469,24 @@ h1.center-title {
 
 .avatar-bar {
   display: flex;
-  gap: 10px;
+  gap: 12px 10px; /* 12px row gap, 10px column gap */
   flex-wrap: wrap;
+  align-content: flex-start;
+  align-items: flex-start;
+  flex-shrink: 0;
   margin-bottom: 20px;
   min-height: 40px;
+}
+
+@keyframes flyInFromLeft {
+  0% {
+    opacity: 0;
+    transform: translateX(-100px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
 }
 
 .avatar-chip {
@@ -480,12 +494,13 @@ h1.center-title {
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
+  height: max-content;
   border-radius: 999px;
   background: var(--bg-card);
   border: 1px solid var(--glass-border);
   font-size: 0.82rem;
   font-weight: 500;
-  animation: fadeSlideIn 0.25s ease-out;
+  animation: flyInFromLeft 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .avatar-chip .dot {
@@ -500,6 +515,24 @@ h1.center-title {
   font-size: 0.65rem;
   color: var(--muted);
   margin-left: 4px;
+}
+
+.chip-remove {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0 0 0 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s;
+}
+
+.chip-remove:hover {
+  color: var(--red);
 }
 
 .empty-avatar-bar {
