@@ -1,4 +1,6 @@
-# 时序人格局 Hackathon Workspace
+# xiaohongshu_hackathon_2026.4
+
+时序人格局 Hackathon Workspace，小红书黑客松巅峰赛项目。
 
 当前目录采用轻量多端结构：
 
@@ -20,16 +22,17 @@ hackhathon/
 
 ## 共享语义
 
-- [shared/contracts.ts](/Users/mychanging/Desktop/hackhathon/shared/contracts.ts)
-- [shared/presets.ts](/Users/mychanging/Desktop/hackhathon/shared/presets.ts)
+- [shared/contracts.ts](shared/contracts.ts)
+- [shared/presets.ts](shared/presets.ts)
 
 ## 页面约定
 
 - 首页 / 角色库
 - 角色详情子页
-  这里展示该人物的详细时间线与阶段节点
 - Arena 议会页
 - 结果区 / 总结页
+
+角色详情子页展示人物的详细时间线与阶段节点。
 
 ## 当前开发方式
 
