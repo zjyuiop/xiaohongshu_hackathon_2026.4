@@ -2,9 +2,13 @@ export type TimelineStageType = 'early' | 'turning-point' | 'stable' | 'crisis' 
 export type ArenaMode = 'chat' | 'debate';
 export type ArenaPhase = 'opening' | 'reflection' | 'rebuttal' | 'synthesis' | 'closing';
 export type ProfileCategory = 'self' | 'celebrity' | 'history' | 'fictional';
-export type AgentRuntimeMode = 'claude-code-sdk';
+export type AgentRuntimeMode = 'claude-agent-sdk';
 export type ReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh';
+export type ArenaMessageKind = 'agent' | 'user';
 export type ClaudeCliEffort = 'low' | 'medium' | 'high' | 'max';
+export type PosterAspectRatio = '16:9' | '2.35:1' | '4:3' | '3:2' | '1:1' | '3:4';
+export type PosterStylePreset = 'poster' | 'editorial' | 'cinematic';
+export type ArenaRunStatus = 'completed' | 'interrupted';
 
 export interface SourceEvidence {
   quote: string;
@@ -58,6 +62,7 @@ export interface PresetProfile {
 
 export interface ArenaMessage {
   id: string;
+  kind?: ArenaMessageKind;
   agentId: string;
   displayName: string;
   stageLabel: string;
@@ -67,6 +72,12 @@ export interface ArenaMessage {
   phase?: ArenaPhase;
   replyToAgentId?: string;
   replyToDisplayName?: string;
+}
+
+export interface ArenaRunConfig {
+  roundCount: number;
+  maxMessageChars: number;
+  reasoningEffort: ReasoningEffort;
 }
 
 export interface DebateJudgeScorecard {
@@ -97,11 +108,40 @@ export interface ArenaSummary {
 
 export interface ArenaRun {
   runId: string;
+  sessionId?: string;
+  continuedFromRunId?: string;
+  status?: ArenaRunStatus;
   mode: ArenaMode;
   topic: string;
   participants: PersonaSpec[];
   messages: ArenaMessage[];
   summary: ArenaSummary;
+  config?: ArenaRunConfig;
+  createdAt?: string;
+}
+
+export interface ArenaOutputLinks {
+  runId: string;
+  shareApiPath: string;
+  shareApiUrl?: string;
+  suggestedSharePath: string;
+  suggestedShareUrl?: string;
+}
+
+export interface ArenaPosterAsset {
+  runId: string;
+  title: string;
+  summary: string;
+  stylePreset: PosterStylePreset;
+  aspectRatio: PosterAspectRatio;
+  outputDir: string;
+  imagePath: string;
+  imageUrl?: string;
+  promptPath?: string;
+  promptUrl?: string;
+  sourcePath?: string;
+  sourceUrl?: string;
+  generatedAt: string;
 }
 
 export interface ParseTimelineRequest {
@@ -132,10 +172,206 @@ export interface ArenaRunRequest {
   mode: ArenaMode;
   selectedAgentIds: string[];
   agents: PersonaSpec[];
+  reasoningEffort?: ReasoningEffort;
+  roundCount?: number;
+  maxMessageChars?: number;
+  guidance?: string;
+  continueFromRunId?: string;
+  sessionId?: string;
 }
 
 export interface ArenaRunResponse {
   result: ArenaRun;
+  links?: ArenaOutputLinks;
+}
+
+export interface ArenaPosterRequest {
+  runId?: string;
+  run?: ArenaRun;
+  stylePreset?: PosterStylePreset;
+  aspectRatio?: PosterAspectRatio;
+  language?: string;
+}
+
+export interface ArenaPosterResponse {
+  runId: string;
+  links: ArenaOutputLinks;
+  poster: ArenaPosterAsset;
+}
+
+export interface ArenaRunHistoryItem {
+  runId: string;
+  sessionId: string;
+  status: ArenaRunStatus;
+  topic: string;
+  mode: ArenaMode;
+  title: string;
+  consensus: string;
+  participantNames: string[];
+  messageCount: number;
+  createdAt: string;
+  continuedFromRunId?: string;
+  latestGuidance?: string;
+}
+
+export type ArenaStreamEventType =
+  | 'run_started'
+  | 'phase_started'
+  | 'speaker_started'
+  | 'speaker_delta'
+  | 'speaker_completed'
+  | 'message'
+  | 'phase_completed'
+  | 'summary_started'
+  | 'summary_delta'
+  | 'summary'
+  | 'done'
+  | 'error';
+
+interface ArenaStreamEventBase {
+  type: ArenaStreamEventType;
+  runId: string;
+  mode: ArenaMode;
+  topic: string;
+  sequence: number;
+  timestamp: string;
+}
+
+export interface ArenaRunStartedEvent extends ArenaStreamEventBase {
+  type: 'run_started';
+  reasoningEffort: ReasoningEffort;
+  config: ArenaRunConfig;
+  sessionId: string;
+  continuedFromRunId?: string;
+  participants: PersonaSpec[];
+  plannedRounds: Array<{
+    round: number;
+    phase: ArenaPhase;
+  }>;
+}
+
+export interface ArenaPhaseStartedEvent extends ArenaStreamEventBase {
+  type: 'phase_started';
+  round: number;
+  phase: ArenaPhase;
+  participants: Array<{
+    agentId: string;
+    displayName: string;
+  }>;
+}
+
+export interface ArenaMessageEvent extends ArenaStreamEventBase {
+  type: 'message';
+  round: number;
+  phase: ArenaPhase;
+  message: ArenaMessage;
+}
+
+export interface ArenaSpeakerStartedEvent extends ArenaStreamEventBase {
+  type: 'speaker_started';
+  round: number;
+  phase: ArenaPhase;
+  messageId: string;
+  participant: {
+    agentId: string;
+    displayName: string;
+    stageLabel: string;
+  };
+  replyTarget?: {
+    agentId: string;
+    displayName: string;
+  };
+}
+
+export interface ArenaSpeakerDeltaEvent extends ArenaStreamEventBase {
+  type: 'speaker_delta';
+  round: number;
+  phase: ArenaPhase;
+  messageId: string;
+  agentId: string;
+  displayName: string;
+  channel: 'text' | 'thinking';
+  delta: string;
+  accumulatedText: string;
+}
+
+export interface ArenaSpeakerCompletedEvent extends ArenaStreamEventBase {
+  type: 'speaker_completed';
+  round: number;
+  phase: ArenaPhase;
+  messageId: string;
+  agentId: string;
+  displayName: string;
+  usedFallback: boolean;
+  durationMs?: number;
+  execution?: ClaudeExecutionInfo;
+}
+
+export interface ArenaPhaseCompletedEvent extends ArenaStreamEventBase {
+  type: 'phase_completed';
+  round: number;
+  phase: ArenaPhase;
+  messageIds: string[];
+}
+
+export interface ArenaSummaryStartedEvent extends ArenaStreamEventBase {
+  type: 'summary_started';
+}
+
+export interface ArenaSummaryDeltaEvent extends ArenaStreamEventBase {
+  type: 'summary_delta';
+  channel: 'text' | 'thinking';
+  delta: string;
+  accumulatedText: string;
+}
+
+export interface ArenaSummaryEvent extends ArenaStreamEventBase {
+  type: 'summary';
+  summary: ArenaSummary;
+}
+
+export interface ArenaDoneEvent extends ArenaStreamEventBase {
+  type: 'done';
+  result: ArenaRun;
+  links?: ArenaOutputLinks;
+}
+
+export interface ArenaErrorEvent extends ArenaStreamEventBase {
+  type: 'error';
+  error: string;
+  round?: number;
+  phase?: ArenaPhase;
+}
+
+export type ArenaStreamEvent =
+  | ArenaRunStartedEvent
+  | ArenaPhaseStartedEvent
+  | ArenaSpeakerStartedEvent
+  | ArenaSpeakerDeltaEvent
+  | ArenaSpeakerCompletedEvent
+  | ArenaMessageEvent
+  | ArenaPhaseCompletedEvent
+  | ArenaSummaryStartedEvent
+  | ArenaSummaryDeltaEvent
+  | ArenaSummaryEvent
+  | ArenaDoneEvent
+  | ArenaErrorEvent;
+
+export interface ArenaRunObserver {
+  onEvent?: (event: ArenaStreamEvent) => void | Promise<void>;
+}
+
+export interface ArenaRuntimeStreamObserver {
+  onSpeakerDelta?: (event: {
+    channel: 'text' | 'thinking';
+    delta: string;
+    accumulatedText: string;
+  }) => void | Promise<void>;
+  onSummaryDelta?: (event: {
+    channel: 'text' | 'thinking';
+    delta: string;
+    accumulatedText: string;
+  }) => void | Promise<void>;
 }
 
 export interface SourceSection {
@@ -164,6 +400,19 @@ export interface GeneratedProfileDraft {
   nodes: TimelineNode[];
 }
 
+export interface TimelineNodePresentationRefinement {
+  nodeId: string;
+  stageLabel: string;
+  keyEvent: string;
+  summary: string;
+}
+
+export interface TimelinePresentationRefinement {
+  subtitle: string;
+  highlights: string[];
+  nodes: TimelineNodePresentationRefinement[];
+}
+
 export interface PersonaBlueprint {
   nodeId: string;
   knownFacts: string[];
@@ -187,11 +436,14 @@ export interface ClaudeExecutionInfo {
 export interface RuntimeStatus {
   mode: AgentRuntimeMode;
   claudeBinary: string;
+  ccsProfile?: string;
   requestedModel: string;
   requestedEffort: ReasoningEffort;
   fallbackModel: string;
   fallbackEffort: ClaudeCliEffort;
   unsupportedModels: string[];
+  siliconFlowEnabled?: boolean;
+  siliconFlowFallbackModels?: string[];
 }
 
 export interface SourceDocumentSummary {

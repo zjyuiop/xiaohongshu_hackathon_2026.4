@@ -6,6 +6,7 @@ import type { AgentRuntimeMode, ClaudeCliEffort, ReasoningEffort } from './domai
 export interface AppConfig {
   port: number;
   backendRoot: string;
+  projectRoot: string;
   databaseUrl: string;
   agentRuntime: AgentRuntimeMode;
   targetModel: string;
@@ -13,9 +14,25 @@ export interface AppConfig {
   fallbackModel: string;
   fallbackEffort: ClaudeCliEffort;
   claudeBinary: string;
+  ccsProfile?: string;
   defaultLibraryDir: string;
   importOnBoot: boolean;
   maxImportSections: number;
+  publicBaseUrl?: string;
+  generatedDir: string;
+  posterSkillsRepoUrl: string;
+  posterModel?: string;
+  posterBaseUrl?: string;
+  posterApiKey?: string;
+  posterRequestTimeoutMs: number;
+  posterRequestRetryCount: number;
+  siliconFlowBaseUrl: string;
+  siliconFlowApiKey?: string;
+  siliconFlowFallbackModels: string[];
+  siliconFlowRequestTimeoutMs: number;
+  arenaSpeakerTimeoutMs: number;
+  arenaSummaryTimeoutMs: number;
+  arenaRunTimeoutMs: number;
 }
 
 function parseBoolean(input: string | undefined, fallback: boolean): boolean {
@@ -31,6 +48,27 @@ function parseNumber(input: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function parseInteger(input: string | undefined, fallback: number, min: number, max: number): number {
+  const parsed = Number.parseInt(input ?? '', 10);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+
+  return Math.min(max, Math.max(min, parsed));
+}
+
+function parseStringList(input: string | undefined, fallback: string[]): string[] {
+  if (!input?.trim()) {
+    return fallback;
+  }
+
+  const result = input
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return result.length > 0 ? result : fallback;
+}
+
 export function mapEffortToClaude(effort: ReasoningEffort): ClaudeCliEffort {
   if (effort === 'xhigh') {
     return 'max';
@@ -41,20 +79,49 @@ export function mapEffortToClaude(effort: ReasoningEffort): ClaudeCliEffort {
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 const backendRoot = path.resolve(moduleDir, '..');
+const projectRoot = path.resolve(backendRoot, '..');
 
 export function getConfig(): AppConfig {
+  const ccsProfile = process.env.CCS_PROFILE?.trim() || undefined;
+  const defaultClaudeBinary = ccsProfile
+    ? path.resolve(backendRoot, 'bin/claude-via-ccs.sh')
+    : path.resolve(backendRoot, 'node_modules/.bin/claude');
+
   return {
     port: parseNumber(process.env.PORT, 3030),
     backendRoot,
+    projectRoot,
     databaseUrl: process.env.DATABASE_URL ?? 'postgresql://postgres:postgres@127.0.0.1:54329/time_persona',
-    agentRuntime: 'claude-code-sdk',
+    agentRuntime: 'claude-agent-sdk',
     targetModel: process.env.TARGET_MODEL ?? 'gpt-5.4',
     reasoningEffort: (process.env.REASONING_EFFORT as ReasoningEffort | undefined) ?? 'xhigh',
     fallbackModel: process.env.FALLBACK_MODEL ?? 'claude-opus-4-6',
     fallbackEffort: (process.env.FALLBACK_EFFORT as ClaudeCliEffort | undefined) ?? 'max',
-    claudeBinary: process.env.CLAUDE_CODE_BIN ?? path.resolve(backendRoot, 'node_modules/.bin/claude'),
+    claudeBinary: process.env.CLAUDE_CODE_BIN ?? defaultClaudeBinary,
+    ccsProfile,
     defaultLibraryDir: process.env.DEFAULT_LIBRARY_DIR ?? '/Users/mychanging/Desktop/知识库收集',
     importOnBoot: parseBoolean(process.env.IMPORT_ON_BOOT, true),
     maxImportSections: parseNumber(process.env.MAX_IMPORT_SECTIONS, 8),
+    publicBaseUrl: process.env.PUBLIC_BASE_URL?.replace(/\/+$/, '') || undefined,
+    generatedDir: process.env.GENERATED_DIR ?? path.resolve(backendRoot, 'generated'),
+    posterSkillsRepoUrl:
+      process.env.POSTER_SKILLS_REPO_URL ??
+      process.env.BAOYU_SKILLS_REPO_URL ??
+      'https://github.com/shaom/infocard-skills.git',
+    posterModel: process.env.POSTER_LLM_MODEL,
+    posterBaseUrl: process.env.POSTER_LLM_BASE_URL?.replace(/\/+$/, '') || undefined,
+    posterApiKey: process.env.POSTER_LLM_API_KEY,
+    posterRequestTimeoutMs: parseInteger(process.env.POSTER_LLM_TIMEOUT_MS, 20000, 2000, 120000),
+    posterRequestRetryCount: parseInteger(process.env.POSTER_LLM_RETRY_COUNT, 1, 0, 3),
+    siliconFlowBaseUrl: process.env.SILICONFLOW_BASE_URL?.replace(/\/+$/, '') || 'https://api.siliconflow.cn/v1',
+    siliconFlowApiKey: process.env.SILICONFLOW_API_KEY?.trim() || undefined,
+    siliconFlowFallbackModels: parseStringList(process.env.SILICONFLOW_FALLBACK_MODELS, [
+      'Pro/moonshotai/Kimi-K2.5',
+      'Pro/MiniMaxAI/MiniMax-M2.5',
+    ]),
+    siliconFlowRequestTimeoutMs: parseInteger(process.env.SILICONFLOW_TIMEOUT_MS, 90000, 5000, 300000),
+    arenaSpeakerTimeoutMs: parseInteger(process.env.ARENA_SPEAKER_TIMEOUT_MS, 90000, 10000, 300000),
+    arenaSummaryTimeoutMs: parseInteger(process.env.ARENA_SUMMARY_TIMEOUT_MS, 120000, 10000, 300000),
+    arenaRunTimeoutMs: parseInteger(process.env.ARENA_RUN_TIMEOUT_MS, 480000, 60000, 1800000),
   };
 }
