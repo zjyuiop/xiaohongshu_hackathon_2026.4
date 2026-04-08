@@ -687,7 +687,7 @@ h1.center-title {
 .msg-text {
   font-size: 0.92rem;
   line-height: 1.7;
-  color: #ddd;
+  color: var(--ink);
   margin: 0;
 }
 
