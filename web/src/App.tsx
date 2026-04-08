@@ -233,8 +233,8 @@ function App() {
             {leftCollapsed ? '▶' : '◀'}
           </button>
           {!leftCollapsed && (
-            <>
-              <span className="section-label" style={{ flex: 1 }}>角色库</span>
+            <div style={{display: 'flex', width: '100%', alignItems: 'center'}}>
+              <span className="section-label" style={{ flex: 1, marginBottom: 0 }}>角色库</span>
               <button
                 className="add-btn"
                 onClick={() => setShowImportForm((v) => !v)}
@@ -242,7 +242,7 @@ function App() {
               >
                 {showImportForm ? '✕' : '+'}
               </button>
-            </>
+            </div>
           )}
         </div>
 
@@ -294,7 +294,7 @@ function App() {
       {/* ═══ RIGHT ═══ */}
       <div className={`col col-right ${rightCollapsed ? 'collapsed' : ''}`}>
         <div className="col-header col-header-right">
-          {!rightCollapsed && <span className="section-label">导出</span>}
+          {!rightCollapsed && <span className="section-label" style={{marginBottom: 0}}>输出与扩展</span>}
           <button
             className="collapse-btn"
             onClick={() => setRightCollapsed((c) => !c)}
@@ -505,12 +505,14 @@ function CouncilStage({
   return (
     <>
 
-      <h1 className="center-title">时序人格局</h1>
-      <p className="center-subtitle">
-        {selectedAgents.length > 0
-          ? `已选 ${selectedAgents.length} 个阶段人格 — 可跨角色混合`
-          : '在左侧点选角色展开时间线，勾选节点加入议会'}
-      </p>
+      <div className="col-header col-header-center">
+        <h1 className="center-title">时序人格局</h1>
+        <p className="center-subtitle" style={{marginBottom: 0}}>
+          {selectedAgents.length > 0
+            ? `已选 ${selectedAgents.length} 个阶段人格 — 可跨角色混合`
+            : '在左侧点选角色展开时间线，勾选节点加入议会'}
+        </p>
+      </div>
 
       {/* Avatar bar */}
       {selectedAgents.length > 0 ? (
@@ -606,7 +608,6 @@ function ExportPanel({
     <>
       {arenaResult ? (
         <>
-          <div className="section-title">输出与扩展</div>
           <div className="summary-card">
             <h4>{arenaResult.summary.title}</h4>
             <div className="quote-highlight">"{arenaResult.summary.consensus}"</div>

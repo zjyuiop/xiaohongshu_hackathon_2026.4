@@ -118,11 +118,37 @@
 
 /* Column header with collapse toggle */
 .col-header {
+  position: sticky;
+  top: -20px;
+  margin-top: -20px;
+  padding-top: 20px;
+  padding-bottom: 2px;
+  background: var(--bg-col);
+  z-index: 50;
   display: flex;
   align-items: center;
   gap: 8px;
   margin-bottom: 12px;
   flex-shrink: 0;
+}
+
+.col-header-center {
+  position: sticky;
+  top: -32px;
+  margin-top: -32px;
+  padding-top: 32px;
+  margin-left: -40px;
+  margin-right: -40px;
+  padding-left: 40px;
+  padding-right: 40px;
+  padding-bottom: 16px;
+  margin-bottom: 24px;
+  background: var(--bg-col);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
 }
 
 .col-header-right {
@@ -822,9 +848,9 @@ h1.center-title {
 .quote-highlight {
   padding: 14px;
   border-radius: var(--radius-sm);
-  background: rgba(156, 92, 255, 0.08);
+  background: rgba(156, 92, 255, 0.08); /* light purple bg */
   border: 1px solid rgba(156, 92, 255, 0.25);
-  color: #e0d0ff;
+  color: #5B21B6; /* Deep purple text for high contrast */
   font-style: italic;
   font-size: 0.88rem;
   line-height: 1.7;
@@ -876,4 +902,78 @@ h1.center-title {
     overflow-y: visible;
   }
   .col-left, .col-right { padding: 20px; }
+}
+
+/* ─── Export Panel (Right) ─── */
+.export-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 32px;
+}
+
+.export-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: var(--ink);
+}
+
+.export-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.export-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #f8fafc;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+  color: var(--ink);
+  text-align: left;
+}
+
+.export-btn:hover {
+  background: #ffffff;
+  border-color: var(--cyan);
+  box-shadow: 0 4px 12px var(--cyan-glow);
+}
+
+.export-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: #f1f5f9;
+  font-size: 1.2rem;
+}
+
+.stats-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--glass-border);
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.stat-val {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--ink);
 }
