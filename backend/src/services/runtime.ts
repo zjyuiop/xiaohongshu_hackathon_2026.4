@@ -11,6 +11,8 @@ import type {
   ClaudeCliEffort,
   ClaudeExecutionInfo,
   GeneratedProfileDraft,
+  MergeAgentsRequest,
+  MergedPersonaDraft,
   PersonaBlueprint,
   PersonaSpec,
   PosterAspectRatio,
@@ -25,12 +27,14 @@ import {
   buildArenaTurnTaskPrompt,
   buildChatSummaryTaskPrompt,
   buildDebateJudgementTaskPrompt,
+  buildPersonaMergeTaskPrompt,
   buildPersonaAgentPrompt,
   buildPersonaTaskPrompt,
   buildTimelinePresentationTaskPrompt,
   buildTimelineTaskPrompt,
   chatModeratorAgentPrompt,
   debateJudgeAgentPrompt,
+  personaFusionAgentPrompt,
   personaSmithAgentPrompt,
   posterArtDirectorAgentPrompt,
   timelineArchivistAgentPrompt,
@@ -45,6 +49,8 @@ import {
   generatedChatSummarySchema,
   generatedDebateJudgeJsonSchema,
   generatedDebateJudgeSchema,
+  generatedMergedPersonaJsonSchema,
+  generatedMergedPersonaSchema,
   generatedPersonaBlueprintsJsonSchema,
   generatedPersonaBlueprintsSchema,
   generatedProfileJsonSchema,
@@ -241,6 +247,18 @@ export class ClaudeCodeRuntime {
       parse: (value) => generatedPersonaBlueprintsSchema.parse(value),
       timeoutMs: 180000,
     }).then(({ value, execution }) => ({ blueprints: value.agents, execution }));
+  }
+
+  async generateMergedPersona(input: MergeAgentsRequest): Promise<{ draft: MergedPersonaDraft; execution: ClaudeExecutionInfo }> {
+    return this.runStructured({
+      agentName: 'persona_fusion_architect',
+      agentDescription: 'Fuses two existing personas into a new synthesized discussion persona.',
+      agentPrompt: personaFusionAgentPrompt,
+      taskPrompt: buildPersonaMergeTaskPrompt(input),
+      schema: generatedMergedPersonaJsonSchema,
+      parse: (value) => generatedMergedPersonaSchema.parse(value),
+      timeoutMs: 180000,
+    }).then(({ value, execution }) => ({ draft: value, execution }));
   }
 
   async generatePersonaMessage(input: {

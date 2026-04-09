@@ -11,6 +11,8 @@ import type {
   ArenaRunRequestPayload,
   ArenaRunResponseEnvelope,
   ArenaStreamEvent,
+  MergeAgentsRequestPayload,
+  MergeAgentsResponse,
   PersonaSpec,
   PresetProfile,
   PosterAspectRatio,
@@ -117,6 +119,16 @@ export async function buildAgents(input: {
   } catch {
     return buildMockAgents(input.personId, input.displayName, input.nodes)
   }
+}
+
+export async function mergeAgents(input: MergeAgentsRequestPayload): Promise<MergeAgentsResponse> {
+  return fetchJson<MergeAgentsResponse>('/api/agents/merge', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(input),
+  })
 }
 
 export async function runArena(input: ArenaRunRequestPayload): Promise<ArenaRunResponseEnvelope> {

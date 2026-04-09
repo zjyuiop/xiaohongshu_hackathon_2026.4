@@ -1,9 +1,20 @@
-import type { ArenaMessage, ArenaMode, ArenaPhase, PersonaSpec, TimelineNode } from './domain.js';
+import type {
+  ArenaMessage,
+  ArenaMode,
+  ArenaPhase,
+  MergeAgentsRequest,
+  ArenaRun,
+  PersonaSpec,
+  PosterAspectRatio,
+  PosterStylePreset,
+  TimelineNode,
+} from './domain.js';
 
 export const timelineArchivistAgentPrompt = [
   '你是“人生时间线档案官”，负责把非结构化人物材料压缩为真实、可讨论的人生节点。',
   '你的输出必须严格基于证据，不做未来推演，不做鸡汤。',
   '你要提炼出可以支持“跨时空人格对话”的关键时间段，让每个节点具备明确的处境、价值观和冲突。',
+  '节点标题必须适合产品 UI 展示，不能带书籍章节痕迹。',
   '所有输出使用中文。',
 ].join('\n');
 
@@ -20,10 +31,53 @@ export function buildTimelineTaskPrompt(input: {
     '3. 每个节点必须代表一个足够鲜明的人格切片，适合后续生成 agent。',
     '4. stageType 只能从 early / turning-point / stable / crisis / rebuild / peak 中选择。',
     '5. sourceEvidence.quote 必须是短引文或紧贴原文的中文转述，不能编造。',
+    '6. stageLabel、keyEvent、highlights 不能直接照抄“第X章/第X节”这类章节名，必须改写成适合时间线展示的人生阶段标题。',
+    '7. timeLabel 优先使用真实年份、时间段或时期描述，不要默认写成“阶段1/阶段2”。',
     input.displayNameHint ? `人物名提示：${input.displayNameHint}` : '人物名提示：如果材料中能明确识别人物，请用最常见的中文姓名。',
     '',
     '原始材料：',
     input.biographyOrDigest,
+  ].join('\n');
+}
+
+export const timelineDisplayEditorAgentPrompt = [
+  '你是“时间线展陈编辑”，负责把已经抽取好的时间节点修成适合前端展示的标题与摘要。',
+  '你不能改动时间顺序，不能增删节点，也不能编造新事实。',
+  '你的任务是去掉书籍章节痕迹，把节点改写成自然、清晰、可读的时间线文案。',
+  '所有输出使用中文。',
+].join('\n');
+
+export function buildTimelinePresentationTaskPrompt(input: {
+  displayName: string;
+  sourceLabel: string;
+  subtitle: string;
+  nodes: TimelineNode[];
+}): string {
+  const compactNodes = input.nodes.map((node) => ({
+    nodeId: node.nodeId,
+    timeLabel: node.timeLabel,
+    stageType: node.stageType,
+    stageLabel: node.stageLabel,
+    keyEvent: node.keyEvent,
+    summary: node.summary,
+    sourceEvidence: node.sourceEvidence,
+  }));
+
+  return [
+    `人物：${input.displayName}`,
+    `来源：${input.sourceLabel}`,
+    `当前副标题：${input.subtitle}`,
+    '目标：把现有时间线节点修订成适合时间线 UI 和角色页展示的版本。',
+    '硬性要求：',
+    '1. 绝对不能改变 nodes 的数量、顺序和 nodeId。',
+    '2. stageLabel 必须是 4-14 个中文字符的展示标题，不能出现“第X章/第X节/Chapter/简介/引言/序章”等章节痕迹。',
+    '3. keyEvent 必须是更完整的事件概括，但仍要适合卡片展示，不能照搬原章节标题。',
+    '4. summary 必须重写成 50-120 个中文字符的自然概括，只能基于已给摘要和证据，不可编造。',
+    '5. subtitle 需要更像一个人物阶段总览副标题，而不是书籍目录描述。',
+    '6. highlights 输出 3-4 条即可，适合作为前端人物卡片亮点短语。',
+    '',
+    '现有节点 JSON：',
+    JSON.stringify(compactNodes, null, 2),
   ].join('\n');
 }
 
@@ -91,13 +145,105 @@ export function buildPersonaAgentPrompt(persona: PersonaSpec): string {
   ].join('\n');
 }
 
-function renderTranscript(messages: ArenaMessage[]): string {
+export const personaFusionAgentPrompt = [
+  '你是“人格融合架构师”，负责把两个现有阶段人格融合成一个新的可对话人格。',
+  '你必须保留事实边界，不能凭空扩写传记，也不能让融合人格拥有上帝视角。',
+  '融合后的声音应该是一个新的稳定人格，不是把两段原话机械拼接。',
+  '如果用户给了融合指令，只能在不违反事实约束的前提下吸收。',
+  '所有输出使用中文。',
+].join('\n');
+
+export function buildPersonaMergeTaskPrompt(input: MergeAgentsRequest): string {
+  const compactPersona = (persona: PersonaSpec) => ({
+    displayName: persona.displayName,
+    personId: persona.personId,
+    timeLabel: persona.timeLabel,
+    stageLabel: persona.stageLabel,
+    keyEvent: persona.keyEvent,
+    knownFacts: persona.knownFacts,
+    sourceEvidence: persona.sourceEvidence,
+    traits: persona.traits,
+    values: persona.values,
+    goal: persona.goal,
+    fear: persona.fear,
+    voiceStyle: persona.voiceStyle,
+    knowledgeBoundary: persona.knowledgeBoundary,
+    forbiddenFutureKnowledge: persona.forbiddenFutureKnowledge,
+    stanceSeed: persona.stanceSeed,
+  });
+
+  return [
+    '目标：把下面两个现有人格融合成一个新的可对话人格。',
+    input.displayName ? `用户指定的新名字：${input.displayName}` : '用户指定的新名字：未指定，请你生成一个自然的新名字。',
+    input.mergePrompt ? `用户融合要求：${input.mergePrompt}` : '用户融合要求：未指定，请按最自然的方式融合。',
+    '硬性要求：',
+    '1. 新人格必须能独立参与 arena 对话，表达上要像一个稳定的人，而不是拼贴摘要。',
+    '2. 只能使用两个原人格已经拥有的事实和证据，不得编造第三套传记。',
+    '3. knowledgeBoundary 必须明确说明：只能基于两个原人格在各自时间点之前已经发生的事实发言。',
+    '4. 如果两个原人格都受未来知识限制，则 forbiddenFutureKnowledge 必须为 true。',
+    '5. knownFacts / traits / values 要去重后提炼，避免同义重复。',
+    '6. sourceEvidence 必须来自给定两个人格已有 evidence，不能新增来源。',
+    '7. stageLabel 要像一个新的人格阶段名称，不要直接写“融合人格”。',
+    '8. voiceStyle 与 stanceSeed 要能支撑后续真实对话，不要空泛。',
+    '',
+    '人格 A JSON：',
+    JSON.stringify(compactPersona(input.primary), null, 2),
+    '',
+    '人格 B JSON：',
+    JSON.stringify(compactPersona(input.secondary), null, 2),
+  ].join('\n');
+}
+
+function truncateContent(value: string, maxChars: number): string {
+  const trimmed = value.trim();
+  if (trimmed.length <= maxChars) {
+    return trimmed;
+  }
+
+  return `${trimmed.slice(0, Math.max(1, maxChars - 1)).trimEnd()}…`;
+}
+
+function selectSummaryMessages(messages: ArenaMessage[]): ArenaMessage[] {
+  if (messages.length <= 24) {
+    return messages;
+  }
+
+  const selected = new Set<number>();
+  const userMessageIndexes = messages
+    .map((message, index) => (message.kind === 'user' ? index : -1))
+    .filter((index) => index >= 0)
+    .slice(-3);
+
+  for (const index of userMessageIndexes) {
+    selected.add(index);
+  }
+
+  for (let index = 0; index < Math.min(3, messages.length); index += 1) {
+    selected.add(index);
+  }
+
+  for (let index = Math.max(0, messages.length - 12); index < messages.length; index += 1) {
+    selected.add(index);
+  }
+
+  for (let index = messages.length - 1; index >= 0 && selected.size < 24; index -= 1) {
+    selected.add(index);
+  }
+
+  return messages.filter((_message, index) => selected.has(index));
+}
+
+function renderTranscript(messages: ArenaMessage[], maxContentChars = 220): string {
   return messages
     .map((message) => {
+      if (message.kind === 'user') {
+        return `用户引导: ${truncateContent(message.content, Math.max(120, maxContentChars))}`;
+      }
+
       const phase = message.phase ? ` ${message.phase}` : '';
       const round = message.round ? `第${message.round}轮` : '';
       const replyTo = message.replyToDisplayName ? ` -> 回应 ${message.replyToDisplayName}` : '';
-      return `${round}${phase} ${message.displayName}${replyTo}: ${message.content}`;
+      return `${round}${phase} ${message.displayName}${replyTo}: ${truncateContent(message.content, maxContentChars)}`;
     })
     .join('\n');
 }
@@ -131,6 +277,7 @@ export function buildArenaTurnTaskPrompt(input: {
   topic: string;
   round: number;
   phase: ArenaPhase;
+  maxMessageChars: number;
   persona: PersonaSpec;
   participants: PersonaSpec[];
   designatedTarget?: PersonaSpec;
@@ -155,17 +302,22 @@ export function buildArenaTurnTaskPrompt(input: {
     input.currentStance ? `你上一轮的 stance 是：${input.currentStance}。除非明确说明为什么改变，否则不要无故切换。` : '这是你的首次发言，你需要先确定自己的 stance。',
     '',
     input.ownPreviousMessages.length > 0 ? '你自己之前说过的话：' : '你自己之前说过的话：暂无',
-    input.ownPreviousMessages.length > 0 ? renderTranscript(input.ownPreviousMessages) : '',
+    input.ownPreviousMessages.length > 0
+      ? renderTranscript(input.ownPreviousMessages, Math.min(240, input.maxMessageChars + 80))
+      : '',
     '',
     input.previousMessages.length > 0 ? '当前可见对话记录：' : '当前可见对话记录：暂无，直接给出你的第一轮判断。',
-    input.previousMessages.length > 0 ? renderTranscript(input.previousMessages) : '',
+    input.previousMessages.length > 0
+      ? renderTranscript(input.previousMessages, Math.min(220, input.maxMessageChars + 60))
+      : '',
     '',
     '输出要求：',
-    '1. content 必须像人物亲口说的话，90-180 个中文字符。',
+    `1. content 必须像人物亲口说的话，控制在 ${Math.max(40, Math.floor(input.maxMessageChars * 0.55))}-${input.maxMessageChars} 个中文字符内。`,
     '2. stance 只能从 support / oppose / reflective / neutral 中选择。',
     '3. 至少把一个已知事实或证据线索转化成你发言中的依据，但不要硬贴引文格式。',
     '4. 如果当前是回应轮或反驳轮，必须真的回应指定对象的观点。',
     '5. 不能写 markdown，不能写旁白，不能解释 schema。',
+    '6. 尽量直接点名回应上一位或指定对象，形成真实对话感，不要像轮流念稿。',
   ].join('\n');
 }
 
@@ -192,7 +344,7 @@ export function buildChatSummaryTaskPrompt(input: {
     `话题：${input.topic}`,
     `参与者：${input.participants.map((item) => item.displayName).join('、')}`,
     '对话记录：',
-    renderTranscript(input.messages),
+    renderTranscript(selectSummaryMessages(input.messages), 160),
     '',
     '输出要求：',
     '1. title 像一个会议标题或故事标题。',
@@ -214,7 +366,7 @@ export function buildDebateJudgementTaskPrompt(input: {
     `话题：${input.topic}`,
     `参与者：${input.participants.map((item) => item.displayName).join('、')}`,
     '辩论记录：',
-    renderTranscript(input.messages),
+    renderTranscript(selectSummaryMessages(input.messages), 160),
     '',
     '输出要求：',
     '1. title 要像一个可以直接上 Demo 页的辩题标题。',
@@ -225,5 +377,61 @@ export function buildDebateJudgementTaskPrompt(input: {
     '6. debateVerdict.rationale 必须说明你为什么判这个结果。',
     '7. scorecards 中要分别给每个参与者打 argument / evidence / responsiveness 三项分数。',
     '8. 如果没有绝对赢家，可以不填 winnerAgentId，但不能不写 rationale。',
+  ].join('\n');
+}
+
+export const posterArtDirectorAgentPrompt = [
+  '你是“跨时空信息图导演”，负责把一场阶段人格讨论转成可分享的视觉信息卡。',
+  '你必须使用项目里已经安装好的 Claude Code Skill 来生成海报，不允许跳过 skill 或手工伪造结果。',
+  '你只能在当前工作目录内工作，不能访问无关目录。',
+  '所有说明与最终结构化输出使用中文。',
+].join('\n');
+
+export function buildArenaPosterTaskPrompt(input: {
+  run: ArenaRun;
+  sourceFilePath: string;
+  stylePreset: PosterStylePreset;
+  aspectRatio: PosterAspectRatio;
+  language: string;
+  htmlOutputPath?: string;
+  imageOutputPath?: string;
+}): string {
+  const participantLine = input.run.participants
+    .map((participant) => `${participant.displayName}（${participant.stageLabel}）`)
+    .join('、');
+  const htmlOutputPath = input.htmlOutputPath ?? 'deliverables/editorial-card.html';
+  const imageOutputPath = input.imageOutputPath ?? 'deliverables/editorial-card.png';
+
+  return [
+    `任务目标：为这场人格讨论生成 1 张可分享的社论风信息图卡，并输出 PNG。`,
+    `讨论主题：${input.run.topic}`,
+    `参与者：${participantLine}`,
+    `标题参考：${input.run.summary.title}`,
+    `共识摘要：${input.run.summary.consensus}`,
+    `叙事引子：${input.run.summary.narrativeHook}`,
+    `源文件：${input.sourceFilePath}`,
+    `风格预设：${input.stylePreset}`,
+    `输出比例：${input.aspectRatio}`,
+    `语言：${input.language}`,
+    `HTML 输出路径：${htmlOutputPath}`,
+    `PNG 输出路径：${imageOutputPath}`,
+    '',
+    '硬性要求：',
+    '1. 必须调用 `editorial-card-screenshot` skill，不允许改用别的技能或直接手写伪造结果。',
+    '2. 必须先基于当前工作目录内的源文件生成 screenshot-ready HTML，再输出 PNG，不要依赖外部图像模型。',
+    '3. 生成结果必须至少包含 1 个 HTML 文件和 1 个 PNG 文件，且都保留在当前工作目录内。',
+    '4. 视觉上要保留“跨时空讨论 / 编辑部信息图 / 高密度结论卡”的感觉，而不是普通网页截图。',
+    '5. 优先用当前 summary / disagreements / actionableAdvice / verdict 组织层次，确保卡片信息密度足够高。',
+    '6. 产物完成后，返回真实文件路径，不能返回臆造路径。',
+    '',
+    '推荐调用方式：',
+    `Use $editorial-card-screenshot to turn \`${input.sourceFilePath}\` into a ${input.aspectRatio} editorial information card. Save the final HTML to \`${htmlOutputPath}\` and the PNG to \`${imageOutputPath}\`.`,
+    '',
+    '返回约定：',
+    `- imagePath 返回 PNG 路径（建议就是 ${imageOutputPath}）`,
+    `- sourcePath 返回 HTML 路径（建议就是 ${htmlOutputPath}）`,
+    `- promptPath 可以返回源 markdown 路径（建议就是 ${input.sourceFilePath}）`,
+    '',
+    '最终只输出符合 schema 的 JSON。',
   ].join('\n');
 }

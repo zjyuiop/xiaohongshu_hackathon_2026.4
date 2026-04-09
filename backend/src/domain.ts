@@ -167,6 +167,36 @@ export interface BuildAgentsResponse {
   agents: PersonaSpec[];
 }
 
+export interface MergeAgentsRequest {
+  primary: PersonaSpec;
+  secondary: PersonaSpec;
+  displayName?: string;
+  mergePrompt?: string;
+}
+
+export interface MergedPersonaDraft {
+  displayName: string;
+  avatarSeed: string;
+  timeLabel: string;
+  stageLabel: string;
+  keyEvent: string;
+  knownFacts: string[];
+  sourceEvidence: SourceEvidence[];
+  traits: string[];
+  values: string[];
+  goal: string;
+  fear: string;
+  voiceStyle: string;
+  knowledgeBoundary: string;
+  forbiddenFutureKnowledge: boolean;
+  stanceSeed: string;
+}
+
+export interface MergeAgentsResponse {
+  agent: PersonaSpec;
+  execution?: ClaudeExecutionInfo;
+}
+
 export interface ArenaRunRequest {
   topic: string;
   mode: ArenaMode;

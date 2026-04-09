@@ -1,27 +1,36 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=Noto+Serif+SC:wght@500;600;700&display=swap');
+
 :root {
-  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-family: 'IBM Plex Sans', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
   line-height: 1.6;
   font-weight: 400;
-  color-scheme: dark;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  color: #0d1726;
+  background: #07111f;
 }
 
 * {
   box-sizing: border-box;
 }
 
+html {
+  min-height: 100%;
+}
+
 body {
   margin: 0;
-  background-color: #050505; /* Deepest black as fallback */
-  color: #ededed;
+  min-height: 100vh;
+  background: #07111f;
+  color: #0d1726;
 }
 
 button,
+input,
 textarea,
-input {
+select {
   font: inherit;
 }
 
@@ -30,17 +39,29 @@ a {
   text-decoration: none;
 }
 
-/* Custom Scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
+::selection {
+  background: rgba(103, 232, 249, 0.28);
+  color: inherit;
 }
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
+
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.24);
+  border: 2px solid transparent;
+  background-clip: content-box;
 }

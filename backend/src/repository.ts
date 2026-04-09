@@ -4,6 +4,7 @@ import postgres, { type JSONValue, type Sql } from 'postgres';
 
 import type {
   ArenaRun,
+  ArenaRunHistoryItem,
   ClaudeExecutionInfo,
   PersonaSpec,
   PresetProfile,
@@ -96,6 +97,17 @@ interface SourceDocumentRow {
   file_path: string;
   imported_at: Date | string;
   section_count: number;
+}
+
+interface ArenaRunRow {
+  id: string;
+  topic: string;
+  mode: ArenaRun['mode'];
+  participants: unknown;
+  messages: unknown;
+  summary: unknown;
+  metadata: Record<string, unknown>;
+  created_at: Date | string;
 }
 
 export interface SourceDocumentInput {
@@ -494,6 +506,27 @@ export class BackendRepository {
     return rows.map((row) => this.mapProfileRow(row));
   }
 
+  async pruneDefaultProfiles(activeProfileIds: string[]): Promise<void> {
+    const rows = await this.sql<{ id: string }[]>`
+      select id
+      from profiles
+      where is_default = true
+    `;
+
+    for (const row of rows) {
+      if (activeProfileIds.includes(row.id)) {
+        continue;
+      }
+
+      await this.sql`
+        update profiles
+        set is_default = false,
+            updated_at = now()
+        where id = ${row.id}
+      `;
+    }
+  }
+
   async getProfileBundle(profileId: string): Promise<ProfileBundle | null> {
     const profileRows = await this.sql<ProfileRow[]>`
       select *
@@ -578,7 +611,15 @@ export class BackendRepository {
         ${this.sql.json(asJson(run.participants))},
         ${this.sql.json(asJson(run.messages))},
         ${this.sql.json(asJson(run.summary))},
-        ${this.sql.json(asJson({ executions }))}
+        ${this.sql.json(
+          asJson({
+            executions,
+            sessionId: run.sessionId ?? run.runId,
+            continuedFromRunId: run.continuedFromRunId,
+            status: run.status ?? 'completed',
+            config: run.config,
+          }),
+        )}
       )
       on conflict (id) do update set
         topic = excluded.topic,
@@ -589,6 +630,74 @@ export class BackendRepository {
         summary = excluded.summary,
         metadata = excluded.metadata
     `;
+  }
+
+  async getArenaRun(runId: string): Promise<ArenaRun | null> {
+    const rows = await this.sql<ArenaRunRow[]>`
+      select id, topic, mode, participants, messages, summary, metadata, created_at
+      from arena_runs
+      where id = ${runId}
+      limit 1
+    `;
+
+    const row = rows[0];
+    if (!row) {
+      return null;
+    }
+
+    return {
+      runId: row.id,
+      sessionId: typeof row.metadata?.sessionId === 'string' ? row.metadata.sessionId : row.id,
+      continuedFromRunId:
+        typeof row.metadata?.continuedFromRunId === 'string' ? row.metadata.continuedFromRunId : undefined,
+      status: row.metadata?.status === 'interrupted' ? 'interrupted' : 'completed',
+      topic: row.topic,
+      mode: row.mode,
+      participants: ensureObjectArray(row.participants),
+      messages: ensureObjectArray(row.messages),
+      summary: (row.summary ?? {}) as ArenaRun['summary'],
+      config:
+        row.metadata?.config && typeof row.metadata.config === 'object'
+          ? (row.metadata.config as ArenaRun['config'])
+          : undefined,
+      createdAt: toIsoString(row.created_at),
+    };
+  }
+
+  async listArenaRunHistory(limit = 20): Promise<ArenaRunHistoryItem[]> {
+    const rows = await this.sql<ArenaRunRow[]>`
+      select id, topic, mode, participants, messages, summary, metadata, created_at
+      from arena_runs
+      order by created_at desc
+      limit ${Math.max(1, Math.min(limit, 100))}
+    `;
+
+    return rows.map((row) => {
+      const messages = ensureObjectArray<ArenaRun['messages'][number]>(row.messages);
+      const latestGuidance = [...messages].reverse().find((message) => message.kind === 'user')?.content;
+
+      return {
+        runId: row.id,
+        sessionId: typeof row.metadata?.sessionId === 'string' ? row.metadata.sessionId : row.id,
+        status: row.metadata?.status === 'interrupted' ? 'interrupted' : 'completed',
+        topic: row.topic,
+        mode: row.mode,
+        title:
+          row.summary && typeof row.summary === 'object' && typeof (row.summary as { title?: unknown }).title === 'string'
+            ? ((row.summary as { title: string }).title || row.topic)
+            : row.topic,
+        consensus:
+          row.summary && typeof row.summary === 'object' && typeof (row.summary as { consensus?: unknown }).consensus === 'string'
+            ? (row.summary as { consensus: string }).consensus
+            : '',
+        participantNames: ensureObjectArray<PersonaSpec>(row.participants).map((participant) => participant.displayName),
+        messageCount: messages.length,
+        createdAt: toIsoString(row.created_at),
+        continuedFromRunId:
+          typeof row.metadata?.continuedFromRunId === 'string' ? row.metadata.continuedFromRunId : undefined,
+        latestGuidance,
+      };
+    });
   }
 
   async getOverview(libraryDir: string): Promise<{ documents: number; defaultProfiles: number; arenaRuns: number }> {

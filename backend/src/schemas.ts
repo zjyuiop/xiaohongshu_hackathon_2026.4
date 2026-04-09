@@ -1,5 +1,9 @@
 import { z } from 'zod';
 
+export const reasoningEffortSchema = z.enum(['low', 'medium', 'high', 'xhigh']);
+export const posterAspectRatioSchema = z.enum(['16:9', '2.35:1', '4:3', '3:2', '1:1', '3:4']);
+export const posterStylePresetSchema = z.enum(['poster', 'editorial', 'cinematic']);
+
 export const sourceEvidenceSchema = z.object({
   quote: z.string().min(1),
   sourceLabel: z.string().min(1),
@@ -52,12 +56,90 @@ export const buildAgentsRequestSchema = z.object({
   nodes: z.array(timelineNodeSchema).min(1),
 });
 
+export const mergeAgentsRequestSchema = z
+  .object({
+    primary: personaSpecSchema,
+    secondary: personaSpecSchema,
+    displayName: z.string().trim().min(1).max(60).optional(),
+    mergePrompt: z.string().trim().min(1).max(1200).optional(),
+  })
+  .refine((value) => value.primary.agentId !== value.secondary.agentId, {
+    message: 'primary and secondary must be different',
+    path: ['secondary'],
+  });
+
 export const arenaRunRequestSchema = z.object({
   topic: z.string().min(1),
   mode: z.enum(['chat', 'debate']),
   selectedAgentIds: z.array(z.string().min(1)).min(2).max(3),
   agents: z.array(personaSpecSchema).min(2),
+  reasoningEffort: reasoningEffortSchema.optional(),
+  roundCount: z.number().int().min(1).max(20).optional(),
+  maxMessageChars: z.number().int().min(60).max(500).optional(),
+  guidance: z.string().trim().min(1).max(1000).optional(),
+  continueFromRunId: z.string().min(1).optional(),
+  sessionId: z.string().min(1).optional(),
 });
+
+export const arenaPosterRequestSchema = z
+  .object({
+    runId: z.string().min(1).optional(),
+    run: z
+      .object({
+        runId: z.string().min(1),
+        topic: z.string().min(1),
+        mode: z.enum(['chat', 'debate']),
+        participants: z.array(personaSpecSchema).min(2),
+        messages: z.array(
+          z.object({
+            id: z.string().min(1),
+            kind: z.enum(['agent', 'user']).optional(),
+            agentId: z.string().min(1),
+            displayName: z.string().min(1),
+            stageLabel: z.string().min(1),
+            content: z.string().min(1),
+            stance: z.enum(['support', 'oppose', 'reflective', 'neutral']),
+            round: z.number().int().positive().optional(),
+            phase: z.enum(['opening', 'reflection', 'rebuttal', 'synthesis', 'closing']).optional(),
+            replyToAgentId: z.string().min(1).optional(),
+            replyToDisplayName: z.string().min(1).optional(),
+          }),
+        ),
+        summary: z.object({
+          title: z.string().min(1),
+          consensus: z.string().min(1),
+          disagreements: z.array(z.string().min(1)),
+          actionableAdvice: z.array(z.string().min(1)),
+          narrativeHook: z.string().min(1),
+          moderatorNote: z.string().min(1).optional(),
+          debateVerdict: z
+            .object({
+              winnerAgentId: z.string().min(1).optional(),
+              winnerDisplayName: z.string().min(1).optional(),
+              rationale: z.string().min(1),
+              scorecards: z.array(
+                z.object({
+                  agentId: z.string().min(1),
+                  displayName: z.string().min(1),
+                  argumentScore: z.number().min(1).max(10),
+                  evidenceScore: z.number().min(1).max(10),
+                  responsivenessScore: z.number().min(1).max(10),
+                  comments: z.string().min(1),
+                }),
+              ),
+            })
+            .optional(),
+        }),
+      })
+      .optional(),
+    stylePreset: posterStylePresetSchema.optional(),
+    aspectRatio: posterAspectRatioSchema.optional(),
+    language: z.string().min(2).max(12).optional(),
+  })
+  .refine((value) => Boolean(value.runId || value.run), {
+    message: 'runId or run is required',
+    path: ['runId'],
+  });
 
 export const generatedProfileSchema = z.object({
   displayName: z.string().min(1),
@@ -67,6 +149,19 @@ export const generatedProfileSchema = z.object({
   highlights: z.array(z.string().min(1)).min(3).max(6),
   suggestedTopics: z.array(z.string().min(1)).min(3).max(6),
   nodes: z.array(timelineNodeSchema).min(3).max(6),
+});
+
+export const timelineNodePresentationRefinementSchema = z.object({
+  nodeId: z.string().min(1),
+  stageLabel: z.string().min(2),
+  keyEvent: z.string().min(2),
+  summary: z.string().min(20),
+});
+
+export const generatedTimelinePresentationSchema = z.object({
+  subtitle: z.string().min(1),
+  highlights: z.array(z.string().min(2)).min(3).max(6),
+  nodes: z.array(timelineNodePresentationRefinementSchema).min(3).max(6),
 });
 
 export const personaBlueprintSchema = z.object({
@@ -81,6 +176,24 @@ export const personaBlueprintSchema = z.object({
 
 export const generatedPersonaBlueprintsSchema = z.object({
   agents: z.array(personaBlueprintSchema).min(1),
+});
+
+export const generatedMergedPersonaSchema = z.object({
+  displayName: z.string().min(1),
+  avatarSeed: z.string().min(1),
+  timeLabel: z.string().min(1),
+  stageLabel: z.string().min(1),
+  keyEvent: z.string().min(1),
+  knownFacts: z.array(z.string().min(1)).min(2).max(6),
+  sourceEvidence: z.array(sourceEvidenceSchema).min(1).max(6),
+  traits: z.array(z.string().min(1)).min(2).max(6),
+  values: z.array(z.string().min(1)).min(2).max(6),
+  goal: z.string().min(1),
+  fear: z.string().min(1),
+  voiceStyle: z.string().min(1),
+  knowledgeBoundary: z.string().min(1),
+  forbiddenFutureKnowledge: z.boolean(),
+  stanceSeed: z.string().min(1),
 });
 
 export const generatedArenaMessageSchema = z.object({
@@ -119,6 +232,15 @@ export const generatedDebateJudgeSchema = generatedArenaSummarySchema.extend({
       .min(2)
       .max(3),
   }),
+});
+
+export const generatedArenaPosterSchema = z.object({
+  outputDir: z.string().min(1),
+  imagePath: z.string().min(1),
+  promptPath: z.string().min(1).optional(),
+  sourcePath: z.string().min(1).optional(),
+  title: z.string().min(1),
+  summary: z.string().min(1),
 });
 
 const sourceEvidenceJsonSchema = {
@@ -168,6 +290,32 @@ export const generatedProfileJsonSchema = {
   additionalProperties: false,
 } as const;
 
+export const generatedTimelinePresentationJsonSchema = {
+  type: 'object',
+  properties: {
+    subtitle: { type: 'string' },
+    highlights: { type: 'array', items: { type: 'string' }, minItems: 3, maxItems: 6 },
+    nodes: {
+      type: 'array',
+      minItems: 3,
+      maxItems: 6,
+      items: {
+        type: 'object',
+        properties: {
+          nodeId: { type: 'string' },
+          stageLabel: { type: 'string' },
+          keyEvent: { type: 'string' },
+          summary: { type: 'string' },
+        },
+        required: ['nodeId', 'stageLabel', 'keyEvent', 'summary'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['subtitle', 'highlights', 'nodes'],
+  additionalProperties: false,
+} as const;
+
 export const generatedPersonaBlueprintsJsonSchema = {
   type: 'object',
   properties: {
@@ -191,6 +339,45 @@ export const generatedPersonaBlueprintsJsonSchema = {
     },
   },
   required: ['agents'],
+  additionalProperties: false,
+} as const;
+
+export const generatedMergedPersonaJsonSchema = {
+  type: 'object',
+  properties: {
+    displayName: { type: 'string' },
+    avatarSeed: { type: 'string' },
+    timeLabel: { type: 'string' },
+    stageLabel: { type: 'string' },
+    keyEvent: { type: 'string' },
+    knownFacts: { type: 'array', items: { type: 'string' }, minItems: 2, maxItems: 6 },
+    sourceEvidence: { type: 'array', items: sourceEvidenceJsonSchema, minItems: 1, maxItems: 6 },
+    traits: { type: 'array', items: { type: 'string' }, minItems: 2, maxItems: 6 },
+    values: { type: 'array', items: { type: 'string' }, minItems: 2, maxItems: 6 },
+    goal: { type: 'string' },
+    fear: { type: 'string' },
+    voiceStyle: { type: 'string' },
+    knowledgeBoundary: { type: 'string' },
+    forbiddenFutureKnowledge: { type: 'boolean' },
+    stanceSeed: { type: 'string' },
+  },
+  required: [
+    'displayName',
+    'avatarSeed',
+    'timeLabel',
+    'stageLabel',
+    'keyEvent',
+    'knownFacts',
+    'sourceEvidence',
+    'traits',
+    'values',
+    'goal',
+    'fear',
+    'voiceStyle',
+    'knowledgeBoundary',
+    'forbiddenFutureKnowledge',
+    'stanceSeed',
+  ],
   additionalProperties: false,
 } as const;
 
@@ -272,5 +459,19 @@ export const generatedDebateJudgeJsonSchema = {
     },
   },
   required: ['title', 'consensus', 'disagreements', 'actionableAdvice', 'narrativeHook', 'debateVerdict'],
+  additionalProperties: false,
+} as const;
+
+export const generatedArenaPosterJsonSchema = {
+  type: 'object',
+  properties: {
+    outputDir: { type: 'string' },
+    imagePath: { type: 'string' },
+    promptPath: { type: ['string', 'null'] },
+    sourcePath: { type: ['string', 'null'] },
+    title: { type: 'string' },
+    summary: { type: 'string' },
+  },
+  required: ['outputDir', 'imagePath', 'title', 'summary'],
   additionalProperties: false,
 } as const;

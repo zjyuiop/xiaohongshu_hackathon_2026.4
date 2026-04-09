@@ -11,6 +11,7 @@ import type {
   ArenaRunRequest,
   ArenaStreamEvent,
   BuildAgentsRequest,
+  MergeAgentsRequest,
   ParseTimelineRequest,
 } from './domain.js';
 import { BackendRepository } from './repository.js';
@@ -18,11 +19,12 @@ import {
   arenaPosterRequestSchema,
   arenaRunRequestSchema,
   buildAgentsRequestSchema,
+  mergeAgentsRequestSchema,
   parseTimelineRequestSchema,
 } from './schemas.js';
 import { runArena } from './services/arena.js';
 import { DefaultLibraryImporter } from './services/importer.js';
-import { buildAgents } from './services/persona.js';
+import { buildAgents, mergeAgents } from './services/persona.js';
 import { generateArenaPoster } from './services/poster.js';
 import { describeRuntime } from './services/runtime.js';
 import { parseTimeline } from './services/timeline.js';
@@ -178,6 +180,21 @@ app.post('/api/agents/build', async (request, response) => {
 
   try {
     const result = await buildAgents(repository, parsed.data as BuildAgentsRequest);
+    response.json(result);
+  } catch (error) {
+    response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.post('/api/agents/merge', async (request, response) => {
+  const parsed = mergeAgentsRequestSchema.safeParse(request.body);
+  if (!parsed.success) {
+    response.status(400).json({ error: parsed.error.flatten() });
+    return;
+  }
+
+  try {
+    const result = await mergeAgents(parsed.data as MergeAgentsRequest);
     response.json(result);
   } catch (error) {
     response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
