@@ -432,7 +432,7 @@ export class ClaudeCodeRuntime {
       }),
       schema: generatedArenaPosterJsonSchema,
       parse: (value) => generatedArenaPosterSchema.parse(value),
-      timeoutMs: 600000,
+      timeoutMs: 45000,
       cwd: input.workingDirectory,
       settingSources: ['project'],
       tools: { type: 'preset', preset: 'claude_code' },

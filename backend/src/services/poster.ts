@@ -32,6 +32,8 @@ const TRANSCRIPT_SNIPPET_MAX_CHARS = 140;
 const VISUAL_PROMPT_MAX_CHARS = 220;
 const TRANSCRIPT_EXCERPT_COUNT = 24;
 const TRANSCRIPT_LINE_MAX_CHARS = 260;
+const POSTER_COPY_DEADLINE_MS = 6000;
+const POSTER_CACHE_MANIFEST_FILE = 'poster-manifest.json';
 
 const SANS_FONT_FAMILY = `'Noto Sans SC','PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif`;
 const MONO_FONT_FAMILY = `'JetBrains Mono','SFMono-Regular',Menlo,monospace`;
@@ -54,10 +56,41 @@ interface PosterChip {
   tone: 'accent' | 'soft' | 'ghost';
 }
 
+interface PosterCacheManifest {
+  runId: string;
+  title: string;
+  summary: string;
+  stylePreset: PosterStylePreset;
+  aspectRatio: PosterAspectRatio;
+  generatedAt: string;
+  imageFileName: string;
+  promptFileName?: string;
+  sourceFileName?: string;
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_resolve, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(`${label}（>${timeoutMs}ms）`));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
 }
 
 function normalizeWhitespace(value: string): string {
@@ -174,6 +207,18 @@ function buildArenaLinks(runId: string): ArenaOutputLinks {
   };
 }
 
+function toCacheToken(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48) || 'item';
+}
+
+function getSkillPosterCacheDir(runId: string, stylePreset: PosterStylePreset, aspectRatio: PosterAspectRatio): string {
+  return path.join(config.generatedDir, 'arena-posters-cache', slugify(runId), `${stylePreset}-${toCacheToken(aspectRatio)}`);
+}
+
 function createWorkspaceSlug(run: ArenaRun): string {
   const nonce = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   return `${slugify(run.topic)}-${slugify(run.runId)}-${nonce}`;
@@ -241,6 +286,36 @@ async function fileExists(filePath: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+function buildPosterAsset(input: {
+  runId: string;
+  title: string;
+  summary: string;
+  stylePreset: PosterStylePreset;
+  aspectRatio: PosterAspectRatio;
+  outputDir: string;
+  imagePath: string;
+  promptPath?: string;
+  sourcePath?: string;
+  generatedAt: string;
+  absoluteBaseUrl?: string;
+}): ArenaPosterAsset {
+  return {
+    runId: input.runId,
+    title: input.title,
+    summary: input.summary,
+    stylePreset: input.stylePreset,
+    aspectRatio: input.aspectRatio,
+    outputDir: input.outputDir,
+    imagePath: input.imagePath,
+    imageUrl: toAbsoluteAssetUrl(input.absoluteBaseUrl, toPublicAssetPath(input.imagePath)),
+    promptPath: input.promptPath,
+    promptUrl: toAbsoluteAssetUrl(input.absoluteBaseUrl, toPublicAssetPath(input.promptPath)),
+    sourcePath: input.sourcePath,
+    sourceUrl: toAbsoluteAssetUrl(input.absoluteBaseUrl, toPublicAssetPath(input.sourcePath)),
+    generatedAt: input.generatedAt,
+  };
 }
 
 async function pickGeneratedSkillFile(
@@ -369,14 +444,13 @@ async function recoverSkillPosterAsset(input: {
     );
     const targetImagePath = path.join(input.workspaceDir, input.imageOutputRelativePath);
     if (await fileExists(captureScriptPath)) {
-      const chromeBinary = await detectChromeBinary();
-      await execFileAsync(captureScriptPath, [sourcePath, targetImagePath, input.aspectRatio], {
+      await capturePosterHtmlToPng({
+        captureScriptPath,
+        sourcePath,
+        targetImagePath,
+        aspectRatio: input.aspectRatio,
         cwd: input.workspaceDir,
-        env: {
-          ...process.env,
-          ...(chromeBinary ? { CHROME_BIN: chromeBinary } : {}),
-        },
-      }).catch(() => undefined);
+      });
       imagePath = (await fileExists(targetImagePath)) ? targetImagePath : undefined;
     }
   }
@@ -385,7 +459,7 @@ async function recoverSkillPosterAsset(input: {
     return undefined;
   }
 
-  return {
+  return buildPosterAsset({
     runId: input.run.runId,
     title: input.run.summary.title || input.run.topic,
     summary: input.run.summary.consensus || input.run.summary.narrativeHook,
@@ -393,13 +467,119 @@ async function recoverSkillPosterAsset(input: {
     aspectRatio: input.aspectRatio,
     outputDir: input.workspaceDir,
     imagePath,
-    imageUrl: toAbsoluteAssetUrl(input.absoluteBaseUrl, toPublicAssetPath(imagePath)),
     promptPath: input.sourceFilePath,
-    promptUrl: toAbsoluteAssetUrl(input.absoluteBaseUrl, toPublicAssetPath(input.sourceFilePath)),
     sourcePath,
-    sourceUrl: toAbsoluteAssetUrl(input.absoluteBaseUrl, toPublicAssetPath(sourcePath)),
     generatedAt: new Date().toISOString(),
+    absoluteBaseUrl: input.absoluteBaseUrl,
+  });
+}
+
+async function loadCachedSkillPosterAsset(input: {
+  run: ArenaRun;
+  stylePreset: PosterStylePreset;
+  aspectRatio: PosterAspectRatio;
+  absoluteBaseUrl?: string;
+}): Promise<ArenaPosterAsset | undefined> {
+  const cacheDir = getSkillPosterCacheDir(input.run.runId, input.stylePreset, input.aspectRatio);
+  const manifestPath = path.join(cacheDir, POSTER_CACHE_MANIFEST_FILE);
+
+  let manifest: PosterCacheManifest;
+  try {
+    manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8')) as PosterCacheManifest;
+  } catch {
+    return undefined;
+  }
+
+  if (
+    manifest.runId !== input.run.runId ||
+    manifest.stylePreset !== input.stylePreset ||
+    manifest.aspectRatio !== input.aspectRatio
+  ) {
+    return undefined;
+  }
+
+  const imagePath = path.join(cacheDir, manifest.imageFileName);
+  const promptPath = manifest.promptFileName ? path.join(cacheDir, manifest.promptFileName) : undefined;
+  const sourcePath = manifest.sourceFileName ? path.join(cacheDir, manifest.sourceFileName) : undefined;
+
+  if (!(await fileExists(imagePath))) {
+    return undefined;
+  }
+
+  if (sourcePath && sourcePath.toLowerCase().endsWith('.html') && !(await isMeaningfulPosterHtml(sourcePath, input.run))) {
+    return undefined;
+  }
+
+  return buildPosterAsset({
+    runId: input.run.runId,
+    title: manifest.title,
+    summary: manifest.summary,
+    stylePreset: manifest.stylePreset,
+    aspectRatio: manifest.aspectRatio,
+    outputDir: cacheDir,
+    imagePath,
+    promptPath,
+    sourcePath,
+    generatedAt: manifest.generatedAt,
+    absoluteBaseUrl: input.absoluteBaseUrl,
+  });
+}
+
+async function persistSkillPosterAsset(input: {
+  run: ArenaRun;
+  poster: ArenaPosterAsset;
+  absoluteBaseUrl?: string;
+}): Promise<ArenaPosterAsset> {
+  const cacheDir = getSkillPosterCacheDir(input.run.runId, input.poster.stylePreset, input.poster.aspectRatio);
+  await fs.rm(cacheDir, { recursive: true, force: true });
+  await ensureDir(cacheDir);
+
+  const imageFileName = path.basename(input.poster.imagePath);
+  const imagePath = path.join(cacheDir, imageFileName);
+  await fs.copyFile(input.poster.imagePath, imagePath);
+
+  let promptFileName: string | undefined;
+  let promptPath: string | undefined;
+  if (input.poster.promptPath && (await fileExists(input.poster.promptPath))) {
+    promptFileName = path.basename(input.poster.promptPath);
+    promptPath = path.join(cacheDir, promptFileName);
+    await fs.copyFile(input.poster.promptPath, promptPath);
+  }
+
+  let sourceFileName: string | undefined;
+  let sourcePath: string | undefined;
+  if (input.poster.sourcePath && (await fileExists(input.poster.sourcePath))) {
+    sourceFileName = path.basename(input.poster.sourcePath);
+    sourcePath = path.join(cacheDir, sourceFileName);
+    await fs.copyFile(input.poster.sourcePath, sourcePath);
+  }
+
+  const manifest: PosterCacheManifest = {
+    runId: input.run.runId,
+    title: input.poster.title,
+    summary: input.poster.summary,
+    stylePreset: input.poster.stylePreset,
+    aspectRatio: input.poster.aspectRatio,
+    generatedAt: input.poster.generatedAt,
+    imageFileName,
+    promptFileName,
+    sourceFileName,
   };
+  await fs.writeFile(path.join(cacheDir, POSTER_CACHE_MANIFEST_FILE), JSON.stringify(manifest, null, 2), 'utf8');
+
+  return buildPosterAsset({
+    runId: input.run.runId,
+    title: input.poster.title,
+    summary: input.poster.summary,
+    stylePreset: input.poster.stylePreset,
+    aspectRatio: input.poster.aspectRatio,
+    outputDir: cacheDir,
+    imagePath,
+    promptPath,
+    sourcePath,
+    generatedAt: input.poster.generatedAt,
+    absoluteBaseUrl: input.absoluteBaseUrl,
+  });
 }
 
 function escapeXml(value: string): string {
@@ -599,6 +779,48 @@ async function ensurePosterSkillsRepo(repoDir: string): Promise<void> {
   });
 }
 
+async function ensureCaptureScriptPath(): Promise<string | undefined> {
+  const cacheDir = path.join(config.generatedDir, '.skill-cache', INFOCARD_REPO_CACHE_NAME);
+  const captureScriptPath = path.join(cacheDir, 'skills', INFOCARD_SKILL_NAME, 'scripts', 'capture_card.sh');
+  if (await fileExists(captureScriptPath)) {
+    return captureScriptPath;
+  }
+
+  await ensurePosterSkillsRepo(cacheDir);
+  return (await fileExists(captureScriptPath)) ? captureScriptPath : undefined;
+}
+
+async function capturePosterHtmlToPng(input: {
+  captureScriptPath: string;
+  sourcePath: string;
+  targetImagePath: string;
+  aspectRatio: PosterAspectRatio;
+  cwd: string;
+}): Promise<boolean> {
+  const chromeBinary = await detectChromeBinary();
+  if (!chromeBinary) {
+    return false;
+  }
+
+  try {
+    await execFileAsync(
+      'bash',
+      [input.captureScriptPath, input.sourcePath, input.targetImagePath, input.aspectRatio],
+      {
+        cwd: input.cwd,
+        env: {
+          ...process.env,
+          CHROME_BIN: chromeBinary,
+        },
+      },
+    );
+  } catch (error) {
+    console.warn('poster capture fallback failed:', error);
+  }
+
+  return fileExists(input.targetImagePath);
+}
+
 async function prepareSkillPosterWorkspace(
   run: ArenaRun,
 ): Promise<{
@@ -633,6 +855,463 @@ async function prepareSkillPosterWorkspace(
     htmlOutputRelativePath: `${INFOCARD_OUTPUT_DIR}/${INFOCARD_HTML_FILE}`,
     imageOutputRelativePath: `${INFOCARD_OUTPUT_DIR}/${INFOCARD_IMAGE_FILE}`,
   };
+}
+
+function getCaptureDimensions(aspectRatio: PosterAspectRatio) {
+  switch (aspectRatio) {
+    case '16:9':
+      return { width: 1920, height: 1080 };
+    case '2.35:1':
+      return { width: 2350, height: 1000 };
+    case '4:3':
+      return { width: 2000, height: 1500 };
+    case '3:2':
+      return { width: 1800, height: 1200 };
+    case '1:1':
+      return { width: 1800, height: 1800 };
+    case '3:4':
+    default:
+      return { width: 1500, height: 2000 };
+  }
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function renderEditorialFallbackHtml(
+  run: ArenaRun,
+  copy: PosterCopyPlan,
+  stylePreset: PosterStylePreset,
+  aspectRatio: PosterAspectRatio,
+): string {
+  const { width, height } = getCaptureDimensions(aspectRatio);
+  const portrait = height > width;
+  const square = width === height;
+  const palette =
+    stylePreset === 'cinematic'
+      ? {
+          paper: '#11161d',
+          ink: '#f4efe8',
+          muted: '#c0c7cf',
+          accent: '#f08c6c',
+          line: 'rgba(255,255,255,0.14)',
+          panel: 'rgba(255,255,255,0.06)',
+          panelStrong: 'rgba(255,255,255,0.1)',
+        }
+      : stylePreset === 'poster'
+        ? {
+            paper: '#f3efe7',
+            ink: '#111111',
+            muted: '#5b5f66',
+            accent: '#194866',
+            line: 'rgba(17,17,17,0.12)',
+            panel: 'rgba(17,17,17,0.04)',
+            panelStrong: 'rgba(17,17,17,0.08)',
+          }
+        : {
+            paper: '#f5f1e8',
+            ink: '#171717',
+            muted: '#58544d',
+            accent: '#8b4b2d',
+            line: 'rgba(23,23,23,0.12)',
+            panel: 'rgba(23,23,23,0.035)',
+            panelStrong: 'rgba(23,23,23,0.07)',
+          };
+
+  const actions = run.summary.actionableAdvice.slice(0, 3);
+  const disagreements = run.summary.disagreements.slice(0, 3);
+  const cast = run.participants.slice(0, portrait ? 6 : 4);
+  const snippets = run.messages.slice(-4);
+  const headline = escapeHtml(copy.title);
+  const deck = escapeHtml(copy.subtitle || run.summary.consensus || run.summary.narrativeHook);
+  const topic = escapeHtml(truncateText(run.topic, portrait ? 52 : 76));
+  const consensus = escapeHtml(run.summary.consensus);
+  const summaryBullets = copy.bullets.slice(0, 3).map((item) => `<li>${escapeHtml(item)}</li>`).join('');
+  const actionItems = actions.map((item) => `<li>${escapeHtml(item)}</li>`).join('');
+  const disagreementItems = disagreements.length > 0
+    ? disagreements.map((item) => `<li>${escapeHtml(item)}</li>`).join('')
+    : '<li>当前没有新的明显分歧，重点在执行与取舍。</li>';
+  const castItems = cast
+    .map(
+      (item) => `
+        <li class="cast-item">
+          <strong>${escapeHtml(item.displayName)}</strong>
+          <span>${escapeHtml(item.stageLabel)}</span>
+        </li>`,
+    )
+    .join('');
+  const snippetItems = snippets
+    .map(
+      (item) => `
+        <article class="quote-item">
+          <p class="quote-meta">${escapeHtml(item.displayName)} / ${escapeHtml(item.stageLabel)}</p>
+          <p class="quote-body">${escapeHtml(truncateText(item.content, portrait ? 72 : 96))}</p>
+        </article>`,
+    )
+    .join('');
+
+  return `<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${headline}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@700;900&family=Noto+Sans+SC:wght@400;500;700&family=Oswald:wght@500;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        --paper: ${palette.paper};
+        --ink: ${palette.ink};
+        --muted: ${palette.muted};
+        --accent: ${palette.accent};
+        --line: ${palette.line};
+        --panel: ${palette.panel};
+        --panel-strong: ${palette.panelStrong};
+        --canvas-width: ${width}px;
+        --canvas-height: ${height}px;
+      }
+
+      * { box-sizing: border-box; }
+      html, body { margin: 0; width: 100%; height: 100%; background: var(--paper); }
+      body {
+        font-family: "Inter", "Noto Sans SC", "PingFang SC", sans-serif;
+        color: var(--ink);
+      }
+
+      .frame { width: var(--canvas-width); height: var(--canvas-height); }
+      .card {
+        width: 100%;
+        height: 100%;
+        padding: ${portrait ? 54 : 48}px;
+        display: grid;
+        grid-template-rows: auto auto 1fr;
+        gap: ${portrait ? 30 : 24}px;
+        background:
+          radial-gradient(circle at top right, rgba(0,0,0,0.04), transparent 24%),
+          linear-gradient(180deg, rgba(255,255,255,0.24), transparent 22%),
+          var(--paper);
+        overflow: hidden;
+        position: relative;
+      }
+
+      .card::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        opacity: 0.04;
+        background-image:
+          radial-gradient(circle at 20% 20%, rgba(0, 0, 0, 0.8) 0.5px, transparent 0.8px),
+          radial-gradient(circle at 70% 40%, rgba(0, 0, 0, 0.6) 0.5px, transparent 0.9px);
+        background-size: 8px 8px, 12px 12px;
+      }
+
+      .masthead {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        position: relative;
+        z-index: 1;
+      }
+
+      .kicker, .meta {
+        margin: 0;
+        font-family: "Oswald", "Inter", sans-serif;
+        font-size: 18px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: ${portrait ? '1fr' : 'minmax(0, 1.15fr) minmax(360px, 0.85fr)'};
+        gap: ${portrait ? 22 : 26}px;
+        align-items: start;
+        position: relative;
+        z-index: 1;
+      }
+
+      .headline {
+        margin: 0;
+        font-family: "Noto Serif SC", serif;
+        font-size: ${portrait ? 98 : square ? 88 : 76}px;
+        line-height: 0.94;
+        letter-spacing: -0.05em;
+      }
+
+      .deck {
+        margin: 18px 0 0;
+        font-size: ${portrait ? 28 : 24}px;
+        line-height: 1.55;
+        color: var(--muted);
+      }
+
+      .topic-line {
+        margin: 22px 0 0;
+        padding-top: 18px;
+        border-top: 5px solid var(--accent);
+        font-size: ${portrait ? 22 : 20}px;
+        line-height: 1.6;
+      }
+
+      .hero-side {
+        padding: 26px 28px;
+        background: var(--panel-strong);
+        border: 1px solid var(--line);
+        display: grid;
+        gap: 16px;
+      }
+
+      .hero-side h2,
+      .section h3 {
+        margin: 0;
+        font-family: "Oswald", "Inter", sans-serif;
+        font-size: 18px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .hero-side p {
+        margin: 0;
+        font-size: ${portrait ? 24 : 22}px;
+        line-height: 1.62;
+      }
+
+      .content {
+        display: grid;
+        grid-template-columns: ${portrait ? '1fr' : 'minmax(0, 1.02fr) minmax(320px, 0.98fr)'};
+        gap: ${portrait ? 20 : 24}px;
+        min-height: 0;
+        position: relative;
+        z-index: 1;
+      }
+
+      .column {
+        display: grid;
+        gap: 18px;
+        align-content: start;
+      }
+
+      .section {
+        padding: 24px 26px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+      }
+
+      .section ul {
+        margin: 14px 0 0;
+        padding-left: 22px;
+        display: grid;
+        gap: 12px;
+        font-size: ${portrait ? 24 : 22}px;
+        line-height: 1.56;
+      }
+
+      .cast-list {
+        list-style: none;
+        padding: 0;
+        margin: 14px 0 0;
+        display: grid;
+        gap: 12px;
+      }
+
+      .cast-item {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 14px 0;
+        border-top: 1px solid var(--line);
+      }
+
+      .cast-item strong {
+        font-size: 22px;
+      }
+
+      .cast-item span {
+        font-size: 19px;
+        color: var(--muted);
+        text-align: right;
+      }
+
+      .quotes {
+        display: grid;
+        gap: 12px;
+        margin-top: 14px;
+      }
+
+      .quote-item {
+        padding: 16px 18px;
+        background: rgba(255,255,255,0.35);
+        border-left: 4px solid var(--accent);
+      }
+
+      .quote-meta {
+        margin: 0 0 8px;
+        font-size: 15px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .quote-body {
+        margin: 0;
+        font-size: ${portrait ? 21 : 19}px;
+        line-height: 1.6;
+      }
+
+      .footer {
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        align-items: end;
+        border-top: 1px solid var(--line);
+        padding-top: 14px;
+        position: relative;
+        z-index: 1;
+      }
+
+      .footer-note {
+        margin: 0;
+        font-size: 16px;
+        line-height: 1.5;
+        color: var(--muted);
+      }
+
+      .footer-run {
+        margin: 0;
+        font-family: "Oswald", "Inter", sans-serif;
+        font-size: 18px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      @media (max-width: 900px) {
+        html, body { width: auto; height: auto; }
+        .frame { width: 100%; height: auto; }
+        .card {
+          width: auto;
+          height: auto;
+          padding: 24px;
+          grid-template-rows: auto;
+        }
+        .hero, .content { grid-template-columns: 1fr; }
+        .headline { font-size: 52px; }
+        .deck, .hero-side p, .section ul, .quote-body { font-size: 18px; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="frame">
+      <article class="card">
+        <header class="masthead">
+          <p class="kicker">${escapeHtml(copy.kicker)}</p>
+          <p class="meta">${escapeHtml(run.status === 'interrupted' ? 'Interrupted Session' : 'Completed Session')}</p>
+        </header>
+
+        <section class="hero">
+          <div>
+            <h1 class="headline">${headline}</h1>
+            <p class="deck">${deck}</p>
+            <p class="topic-line">${topic}</p>
+          </div>
+
+          <aside class="hero-side">
+            <h2>Core Judgment</h2>
+            <p>${consensus}</p>
+          </aside>
+        </section>
+
+        <section class="content">
+          <div class="column">
+            <section class="section">
+              <h3>What To Do Next</h3>
+              <ul>${actionItems || summaryBullets}</ul>
+            </section>
+            <section class="section">
+              <h3>Why This Matters</h3>
+              <ul>${summaryBullets}</ul>
+            </section>
+          </div>
+
+          <div class="column">
+            <section class="section">
+              <h3>Who Spoke</h3>
+              <ul class="cast-list">${castItems}</ul>
+            </section>
+            <section class="section">
+              <h3>Tension</h3>
+              <ul>${disagreementItems}</ul>
+            </section>
+            <section class="section">
+              <h3>Key Quotes</h3>
+              <div class="quotes">${snippetItems}</div>
+            </section>
+          </div>
+        </section>
+
+        <footer class="footer">
+          <p class="footer-note">${escapeHtml(copy.visualPrompt)}</p>
+          <p class="footer-run">${escapeHtml(run.runId)}</p>
+        </footer>
+      </article>
+    </main>
+  </body>
+</html>`;
+}
+
+async function generateEditorialFallbackPosterAsset(input: {
+  run: ArenaRun;
+  copy: PosterCopyPlan;
+  stylePreset: PosterStylePreset;
+  aspectRatio: PosterAspectRatio;
+  workspaceDir: string;
+  promptPath: string;
+  absoluteBaseUrl?: string;
+}): Promise<ArenaPosterAsset | undefined> {
+  const captureScriptPath = await ensureCaptureScriptPath();
+  if (!captureScriptPath) {
+    return undefined;
+  }
+
+  const deliverablesDir = path.join(input.workspaceDir, INFOCARD_OUTPUT_DIR);
+  await ensureDir(deliverablesDir);
+
+  const htmlPath = path.join(deliverablesDir, INFOCARD_HTML_FILE);
+  const imagePath = path.join(deliverablesDir, INFOCARD_IMAGE_FILE);
+  await fs.writeFile(htmlPath, renderEditorialFallbackHtml(input.run, input.copy, input.stylePreset, input.aspectRatio), 'utf8');
+
+  const captured = await capturePosterHtmlToPng({
+    captureScriptPath,
+    sourcePath: htmlPath,
+    targetImagePath: imagePath,
+    aspectRatio: input.aspectRatio,
+    cwd: input.workspaceDir,
+  });
+  if (!captured) {
+    return undefined;
+  }
+
+  return buildPosterAsset({
+    runId: input.run.runId,
+    title: input.copy.title,
+    summary: input.copy.subtitle,
+    stylePreset: input.stylePreset,
+    aspectRatio: input.aspectRatio,
+    outputDir: deliverablesDir,
+    imagePath,
+    promptPath: input.promptPath,
+    sourcePath: htmlPath,
+    generatedAt: new Date().toISOString(),
+    absoluteBaseUrl: input.absoluteBaseUrl,
+  });
 }
 
 async function preparePosterWorkspace(
@@ -741,7 +1420,7 @@ async function generateArenaPosterWithSkill(
     throw new Error(`技能返回的 HTML 产物无效或仍是占位内容: ${normalizedSourcePath}`);
   }
 
-  return {
+  return buildPosterAsset({
     runId: run.runId,
     title: generated.poster.title,
     summary: generated.poster.summary,
@@ -749,13 +1428,11 @@ async function generateArenaPosterWithSkill(
     aspectRatio,
     outputDir,
     imagePath,
-    imageUrl: toAbsoluteAssetUrl(absoluteBaseUrl, toPublicAssetPath(imagePath)),
     promptPath,
-    promptUrl: toAbsoluteAssetUrl(absoluteBaseUrl, toPublicAssetPath(promptPath)),
     sourcePath: normalizedSourcePath,
-    sourceUrl: toAbsoluteAssetUrl(absoluteBaseUrl, toPublicAssetPath(normalizedSourcePath)),
     generatedAt: new Date().toISOString(),
-  };
+    absoluteBaseUrl,
+  });
 }
 
 function buildPosterPrompt(run: ArenaRun, stylePreset: PosterStylePreset, aspectRatio: PosterAspectRatio, language: string) {
@@ -1157,8 +1834,13 @@ export async function generateArenaPoster(
   const language = input.language ?? 'zh';
   const links = buildArenaLinks(run.runId);
 
-  try {
-    const poster = await generateArenaPosterWithSkill(run, stylePreset, aspectRatio, language, absoluteBaseUrl);
+  const cachedSkillPoster = await loadCachedSkillPosterAsset({
+    run,
+    stylePreset,
+    aspectRatio,
+    absoluteBaseUrl,
+  });
+  if (cachedSkillPoster) {
     return {
       runId: run.runId,
       links: {
@@ -1166,7 +1848,25 @@ export async function generateArenaPoster(
         shareApiUrl: absoluteBaseUrl ? `${absoluteBaseUrl}${links.shareApiPath}` : undefined,
         suggestedShareUrl: absoluteBaseUrl ? `${absoluteBaseUrl}${links.suggestedSharePath}` : undefined,
       },
+      poster: cachedSkillPoster,
+    };
+  }
+
+  try {
+    const poster = await generateArenaPosterWithSkill(run, stylePreset, aspectRatio, language, absoluteBaseUrl);
+    const cachedPoster = await persistSkillPosterAsset({
+      run,
       poster,
+      absoluteBaseUrl,
+    });
+    return {
+      runId: run.runId,
+      links: {
+        ...links,
+        shareApiUrl: absoluteBaseUrl ? `${absoluteBaseUrl}${links.shareApiPath}` : undefined,
+        suggestedShareUrl: absoluteBaseUrl ? `${absoluteBaseUrl}${links.suggestedSharePath}` : undefined,
+      },
+      poster: cachedPoster,
     };
   } catch (error) {
     console.warn('poster skill fallback:', error);
@@ -1180,7 +1880,11 @@ export async function generateArenaPoster(
   const fallbackCopy = buildFallbackPosterCopy(run);
   let copy = fallbackCopy;
   try {
-    const remoteCopy = await requestPosterCopyFromLlm(run, stylePreset, aspectRatio, language);
+    const remoteCopy = await withTimeout(
+      requestPosterCopyFromLlm(run, stylePreset, aspectRatio, language),
+      POSTER_COPY_DEADLINE_MS,
+      '海报文案超时，改用本地文案',
+    );
     if (remoteCopy) {
       copy = remoteCopy;
     }
@@ -1190,10 +1894,31 @@ export async function generateArenaPoster(
   copy = sanitizePosterCopy(copy, fallbackCopy);
   await fs.writeFile(copyFilePath, JSON.stringify(copy, null, 2), 'utf8');
 
+  const editorialFallbackPoster = await generateEditorialFallbackPosterAsset({
+    run,
+    copy,
+    stylePreset,
+    aspectRatio,
+    workspaceDir,
+    promptPath: copyFilePath,
+    absoluteBaseUrl,
+  });
+  if (editorialFallbackPoster) {
+    return {
+      runId: run.runId,
+      links: {
+        ...links,
+        shareApiUrl: absoluteBaseUrl ? `${absoluteBaseUrl}${links.shareApiPath}` : undefined,
+        suggestedShareUrl: absoluteBaseUrl ? `${absoluteBaseUrl}${links.suggestedSharePath}` : undefined,
+      },
+      poster: editorialFallbackPoster,
+    };
+  }
+
   const imagePath = path.join(workspaceDir, `arena-poster-${stylePreset}-${slugify(run.runId)}.svg`);
   await fs.writeFile(imagePath, renderPosterSvg(run, copy, stylePreset, aspectRatio), 'utf8');
 
-  const poster: ArenaPosterAsset = {
+  const poster = buildPosterAsset({
     runId: run.runId,
     title: copy.title,
     summary: copy.subtitle,
@@ -1201,13 +1926,11 @@ export async function generateArenaPoster(
     aspectRatio,
     outputDir: workspaceDir,
     imagePath,
-    imageUrl: toAbsoluteAssetUrl(absoluteBaseUrl, toPublicAssetPath(imagePath)),
     promptPath: promptFilePath,
-    promptUrl: toAbsoluteAssetUrl(absoluteBaseUrl, toPublicAssetPath(promptFilePath)),
     sourcePath: sourceFilePath,
-    sourceUrl: toAbsoluteAssetUrl(absoluteBaseUrl, toPublicAssetPath(sourceFilePath)),
     generatedAt: new Date().toISOString(),
-  };
+    absoluteBaseUrl,
+  });
 
   return {
     runId: run.runId,
