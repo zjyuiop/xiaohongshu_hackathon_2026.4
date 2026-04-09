@@ -257,7 +257,7 @@ export class ClaudeCodeRuntime {
       taskPrompt: buildPersonaMergeTaskPrompt(input),
       schema: generatedMergedPersonaJsonSchema,
       parse: (value) => generatedMergedPersonaSchema.parse(value),
-      timeoutMs: 180000,
+      timeoutMs: 45000,
     }).then(({ value, execution }) => ({ draft: value, execution }));
   }
 
