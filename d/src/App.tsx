@@ -11,22 +11,7 @@ import type {
   ArenaRun,
   PosterAspectRatio,
   PosterStylePreset,
-  ReasoningEffort,
 } from './types'
-
-const reasoningEffortLabels: Record<ReasoningEffort, string> = {
-  low: '快',
-  medium: '均衡',
-  high: '深入',
-  xhigh: '极深',
-}
-
-const stanceLabels: Record<NonNullable<ArenaMessage['stance']>, string> = {
-  support: '支持',
-  oppose: '反对',
-  reflective: '反思',
-  neutral: '中立',
-}
 
 const phaseLabels: Record<string, string> = {
   opening: '开场',
@@ -216,8 +201,10 @@ function SharePage() {
   const infographicUrl = run ? buildInfographicUrl(run.runId) : buildInfographicUrl(runId ?? 'share')
   const messageGroups = run ? groupMessagesByRound(run.messages) : []
   const roundCount = run ? countRounds(run.messages) : 0
-  const messageCount = run?.messages.length ?? 0
-  const statusLabel = run?.status === 'interrupted' ? '已中断' : '已完成'
+  const highlightGroups = messageGroups.slice(-3).map((group) => ({
+    ...group,
+    messages: group.messages.slice(-2),
+  }))
 
   function notify(message: string) {
     setToastMessage(message)
@@ -237,15 +224,6 @@ function SharePage() {
 
     await writeClipboardText(shareUrl)
     notify('分享链接已复制')
-  }
-
-  async function handleCopyTranscript() {
-    if (!run) {
-      return
-    }
-
-    await writeClipboardText(buildTranscriptText(run))
-    notify('回放文本已复制')
   }
 
   async function handleCopyInfographicLink() {
@@ -274,11 +252,8 @@ function SharePage() {
             <button className="share-btn share-btn-secondary" type="button" onClick={handleCopyShareLink} disabled={!run}>
               复制分享链接
             </button>
-            <button className="share-btn share-btn-secondary" type="button" onClick={handleCopyTranscript} disabled={!run}>
-              复制回放文本
-            </button>
             <Link className="share-btn share-btn-primary" to={infographicUrl}>
-              打开信息图页
+              查看信息图海报
             </Link>
           </div>
         </header>
@@ -303,214 +278,117 @@ function SharePage() {
 
         {run && (
           <>
-            <section className="share-hero">
+            <section className="share-hero share-hero-focused">
               <div className="share-hero-copy">
                 <p className="share-kicker">Share / {run.mode === 'debate' ? '辩论场' : '对谈场'}</p>
                 <h1 className="share-title">{run.summary.title}</h1>
                 <p className="share-lead">{run.summary.narrativeHook || run.summary.consensus}</p>
 
                 <div className="share-chip-row">
-                  <span className="share-chip">{run.topic}</span>
                   <span className="share-chip">{run.participants.length} 位参与者</span>
-                  <span className="share-chip">{run.messages.length} 条消息</span>
                   <span className="share-chip">{roundCount} 轮</span>
+                  <span className="share-chip">{run.mode === 'debate' ? '观点交锋' : '多阶段对谈'}</span>
                   <span className={`share-chip share-chip-status ${run.status === 'interrupted' ? 'is-warn' : 'is-ok'}`}>
-                    {statusLabel}
+                    {run.status === 'interrupted' ? '阶段性结果' : '完整结果'}
                   </span>
+                </div>
+
+                <div className="share-hero-actions">
+                  <Link className="share-btn share-btn-primary" to={infographicUrl}>
+                    查看信息图海报
+                  </Link>
+                  <button className="share-btn share-btn-secondary" type="button" onClick={handleCopyInfographicLink}>
+                    复制海报链接
+                  </button>
                 </div>
               </div>
 
-              <aside className="share-hero-aside">
-                <div className="share-stat-grid">
-                  <StatCard label="Run ID" value={run.runId} />
-                  <StatCard label="Session" value={run.sessionId ?? '—'} />
-                  <StatCard label="创建时间" value={formatDateTime(run.createdAt)} />
-                  <StatCard label="模式" value={run.mode === 'debate' ? '辩论' : '对谈'} />
-                </div>
-
-                <div className="share-trace">
-                  <p className="share-trace-label">当前链接</p>
-                  <p className="share-trace-value">{shareUrl}</p>
-                </div>
-
-                <div className="share-launch-card">
-                  <p className="share-card-eyebrow">信息图</p>
-                  <h3 className="share-launch-title">独立预览与下载页</h3>
-                  <p className="share-launch-copy">
-                    这里把海报预览、风格切换、下载与打开动作集中到一页，避免分享页继续变得拥挤。
-                  </p>
-                  <div className="share-inline-actions">
-                    <Link className="share-btn share-btn-primary" to={infographicUrl}>
-                      进入信息图页
-                    </Link>
-                    <button className="share-btn share-btn-secondary" type="button" onClick={handleCopyInfographicLink}>
-                      复制信息图链接
-                    </button>
-                  </div>
+              <aside className="share-hero-aside share-cast-panel">
+                <p className="share-card-eyebrow">参与角色</p>
+                <div className="share-cast-list">
+                  {run.participants.map((participant) => (
+                    <article className="share-cast-item" key={participant.agentId}>
+                      <strong>{participant.displayName}</strong>
+                      <span>{participant.stageLabel}</span>
+                    </article>
+                  ))}
                 </div>
               </aside>
             </section>
 
-            <div className="share-layout">
-              <main className="share-main">
+            <div className="share-story-stack">
+              <section className="share-card share-focus-card">
+                <div className="share-card-header">
+                  <div>
+                    <p className="share-card-eyebrow">这场讨论最后落在</p>
+                    <h2 className="share-card-title">一个结论，三条行动</h2>
+                  </div>
+                </div>
+
+                <p className="share-topic">{run.topic}</p>
+                <p className="share-quote">{run.summary.consensus}</p>
+                {run.summary.moderatorNote ? <p className="share-note">{run.summary.moderatorNote}</p> : null}
+
+                <div className="share-summary-grid">
+                  <article className="share-subcard">
+                    <p className="share-mini-title">建议现在就做</p>
+                    <ul className="share-list">
+                      {run.summary.actionableAdvice.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </article>
+                  <article className="share-subcard">
+                    <p className="share-mini-title">仍然需要面对</p>
+                    <ul className="share-list">
+                      {run.summary.disagreements.length > 0 ? run.summary.disagreements.map((item) => <li key={item}>{item}</li>) : <li>当前没有新的明显分歧</li>}
+                    </ul>
+                  </article>
+                </div>
+              </section>
+
+              {run.summary.debateVerdict && (
                 <section className="share-card">
                   <div className="share-card-header">
                     <div>
-                      <p className="share-card-eyebrow">总览</p>
-                      <h2 className="share-card-title">回放摘要</h2>
-                      <p className="share-note">摘要与对话分开展示，方便先看结论，再回看细节。</p>
+                      <p className="share-card-eyebrow">裁判结论</p>
+                      <h2 className="share-card-title">{run.summary.debateVerdict.winnerDisplayName ?? '未指明胜者'}</h2>
                     </div>
                   </div>
-
-                  <div className="share-summary-grid">
-                    <article className="share-subcard">
-                      <p className="share-mini-title">议题</p>
-                      <p className="share-topic">{run.topic}</p>
-                    </article>
-                    <article className="share-subcard">
-                      <p className="share-mini-title">阶段共识</p>
-                      <p className="share-quote">{run.summary.consensus}</p>
-                      {run.summary.moderatorNote && <p className="share-note">{run.summary.moderatorNote}</p>}
-                    </article>
-                    <article className="share-subcard">
-                      <p className="share-mini-title">分歧</p>
-                      <ul className="share-list">
-                        {run.summary.disagreements.length > 0 ? run.summary.disagreements.map((item) => <li key={item}>{item}</li>) : <li>暂无显著分歧</li>}
-                      </ul>
-                    </article>
-                    <article className="share-subcard">
-                      <p className="share-mini-title">行动建议</p>
-                      <ul className="share-list">
-                        {run.summary.actionableAdvice.map((item) => (
-                          <li key={item}>{item}</li>
-                        ))}
-                      </ul>
-                    </article>
-                  </div>
+                  <p className="share-note share-note-strong">{run.summary.debateVerdict.rationale}</p>
                 </section>
+              )}
 
-                <section className="share-card">
-                  <div className="share-card-header">
-                    <div>
-                      <p className="share-card-eyebrow">回放</p>
-                      <h2 className="share-card-title">逐轮对话</h2>
-                    </div>
-                    <span className="share-chip">{messageCount} 条消息</span>
+              <section className="share-card">
+                <div className="share-card-header">
+                  <div>
+                    <p className="share-card-eyebrow">关键片段</p>
+                    <h2 className="share-card-title">只保留最值得看的几段</h2>
                   </div>
+                </div>
 
-                  <div className="share-message-list">
-                    {messageGroups.map((group) => (
-                      <div className="share-message-group" key={group.round}>
-                        <div className="share-round-label">{group.round === 0 ? '实时引导' : `第 ${group.round} 轮`}</div>
-                        {group.messages.map((message) => (
-                          <article
-                            key={message.id}
-                            className={`share-message share-message-${toneClass(message.stance)} ${message.kind === 'user' ? 'share-message-user' : ''}`}
-                          >
-                            <div className="share-message-meta">
-                              <span>{message.displayName}</span>
-                              <span>{message.stageLabel}</span>
-                              <span>{phaseLabels[message.phase ?? ''] ?? '消息'}</span>
-                              <span>{stanceLabels[message.stance]}</span>
-                              {message.replyToDisplayName && <span>回应 {message.replyToDisplayName}</span>}
-                            </div>
-                            <p className="share-message-body">{message.content}</p>
-                          </article>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                </section>
-
-                {run.summary.debateVerdict && (
-                  <section className="share-card">
-                    <div className="share-card-header">
-                      <div>
-                        <p className="share-card-eyebrow">裁判</p>
-                        <h2 className="share-card-title">辩论结论</h2>
-                      </div>
-                    </div>
-                    <p className="share-quote">胜者：{run.summary.debateVerdict.winnerDisplayName ?? '未指明'}</p>
-                    <p className="share-note">{run.summary.debateVerdict.rationale}</p>
-                    <div className="share-scorecard-list">
-                      {run.summary.debateVerdict.scorecards.map((scorecard) => (
-                        <div className="share-scorecard" key={scorecard.agentId}>
-                          <div className="share-scorecard-top">
-                            <strong>{scorecard.displayName}</strong>
-                            <span>
-                              {scorecard.argumentScore} / {scorecard.evidenceScore} / {scorecard.responsivenessScore}
-                            </span>
+                <div className="share-message-list">
+                  {highlightGroups.map((group) => (
+                    <div className="share-message-group" key={group.round}>
+                      <div className="share-round-label">{group.round === 0 ? '实时引导' : `第 ${group.round} 轮`}</div>
+                      {group.messages.map((message) => (
+                        <article
+                          key={message.id}
+                          className={`share-message share-message-${toneClass(message.stance)} ${message.kind === 'user' ? 'share-message-user' : ''}`}
+                        >
+                          <div className="share-message-meta">
+                            <span>{message.displayName}</span>
+                            <span>{message.stageLabel}</span>
+                            <span>{phaseLabels[message.phase ?? ''] ?? '消息'}</span>
+                            {message.replyToDisplayName ? <span>回应 {message.replyToDisplayName}</span> : null}
                           </div>
-                          <p>{scorecard.comments}</p>
-                        </div>
+                          <p className="share-message-body">{message.content}</p>
+                        </article>
                       ))}
                     </div>
-                  </section>
-                )}
-              </main>
-
-              <aside className="share-side">
-                <section className="share-card">
-                  <div className="share-card-header">
-                    <div>
-                      <p className="share-card-eyebrow">参与者</p>
-                      <h2 className="share-card-title">人物列表</h2>
-                    </div>
-                  </div>
-                  <div className="share-persona-grid">
-                    {run.participants.map((participant, index) => (
-                      <article className="share-persona" key={participant.agentId}>
-                        <div className="share-persona-avatar" aria-hidden="true">
-                          {String(index + 1).padStart(2, '0')}
-                        </div>
-                        <div className="share-persona-copy">
-                          <strong>{participant.displayName}</strong>
-                          <p>{participant.stageLabel}</p>
-                          <span>{participant.timeLabel}</span>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                </section>
-
-                <section className="share-card">
-                  <div className="share-card-header">
-                    <div>
-                      <p className="share-card-eyebrow">参数</p>
-                      <h2 className="share-card-title">会话配置</h2>
-                    </div>
-                  </div>
-                  <div className="share-config-grid">
-                    <ConfigRow label="轮数" value={run.config?.roundCount?.toString() ?? '—'} />
-                    <ConfigRow label="字数上限" value={run.config?.maxMessageChars?.toString() ?? '—'} />
-                    <ConfigRow
-                      label="推理强度"
-                      value={run.config?.reasoningEffort ? reasoningEffortLabels[run.config.reasoningEffort] : '—'}
-                    />
-                    <ConfigRow label="来源" value={run.continuedFromRunId ?? '首个会话'} />
-                  </div>
-                </section>
-
-                <section className="share-card share-output-entry">
-                  <div className="share-card-header">
-                    <div>
-                      <p className="share-card-eyebrow">信息图</p>
-                      <h2 className="share-card-title">单独页面展示与下载</h2>
-                    </div>
-                  </div>
-                  <p className="share-note">
-                    分享页只保留摘要与回放。信息图被拆到独立页面，专门负责生成、预览和下载，避免继续把当前页面堆乱。
-                  </p>
-                  <div className="share-inline-actions">
-                    <Link className="share-btn share-btn-primary" to={infographicUrl}>
-                      打开信息图页
-                    </Link>
-                    <button className="share-btn share-btn-secondary" type="button" onClick={handleCopyInfographicLink}>
-                      复制信息图链接
-                    </button>
-                  </div>
-                </section>
-              </aside>
+                  ))}
+                </div>
+              </section>
             </div>
           </>
         )}
@@ -711,14 +589,13 @@ function InfographicPage() {
 
         {run && (
           <>
-            <section className="share-hero">
+            <section className="share-hero share-hero-solo">
               <div className="share-hero-copy">
                 <p className="share-kicker">Infographic / {run.mode === 'debate' ? '辩论场' : '对谈场'}</p>
                 <h1 className="share-title">{run.summary.title}</h1>
-                <p className="share-lead">这里专门负责信息图的生成、展示与下载。左侧预览更像画布，右侧只保留必要控制与文件动作。</p>
+                <p className="share-lead">这里专门负责信息图的生成、展示与下载。只保留看图、换风格、重新生成这几个必要动作。</p>
 
                 <div className="share-chip-row">
-                  <span className="share-chip">{run.topic}</span>
                   <span className="share-chip">{posterStyle}</span>
                   <span className="share-chip">{posterAspectRatio}</span>
                   <span className={`share-chip share-chip-status ${run.status === 'interrupted' ? 'is-warn' : 'is-ok'}`}>
@@ -726,28 +603,6 @@ function InfographicPage() {
                   </span>
                 </div>
               </div>
-
-              <aside className="share-hero-aside">
-                <div className="share-stat-grid">
-                  <StatCard label="Run ID" value={run.runId} />
-                  <StatCard label="Session" value={run.sessionId ?? '—'} />
-                  <StatCard label="参与者" value={`${run.participants.length} 位`} />
-                  <StatCard label="轮数" value={String(countRounds(run.messages))} />
-                </div>
-
-                <div className="share-trace">
-                  <p className="share-trace-label">页面地址</p>
-                  <p className="share-trace-value">{asAbsoluteUrl(infographicUrl)}</p>
-                </div>
-
-                <div className="share-launch-card">
-                  <p className="share-card-eyebrow">输出</p>
-                  <h3 className="share-launch-title">打开、下载、复用</h3>
-                  <p className="share-launch-copy">
-                    生成结果会保留为独立文件，支持新标签打开和直接下载。提示词与源文档也能单独查看。
-                  </p>
-                </div>
-              </aside>
             </section>
 
             <div className="share-layout infographic-layout">
@@ -802,7 +657,7 @@ function InfographicPage() {
                   <div className="share-card-header">
                     <div>
                       <p className="share-card-eyebrow">参数</p>
-                      <h2 className="share-card-title">渲染控制</h2>
+                      <h2 className="share-card-title">风格与比例</h2>
                     </div>
                   </div>
 
@@ -848,27 +703,9 @@ function InfographicPage() {
                 <section className="share-card">
                   <div className="share-card-header">
                     <div>
-                      <p className="share-card-eyebrow">文件</p>
-                      <h2 className="share-card-title">输出与原始材料</h2>
+                      <p className="share-card-eyebrow">说明</p>
+                      <h2 className="share-card-title">当前输出</h2>
                     </div>
-                  </div>
-
-                  <div className="share-inline-actions">
-                    {poster?.imageUrl ? (
-                      <a className="share-btn share-btn-secondary" href={poster.imageUrl} target="_blank" rel="noreferrer">
-                        打开信息图文件
-                      </a>
-                    ) : null}
-                    {poster?.promptUrl ? (
-                      <a className="share-btn share-btn-secondary" href={poster.promptUrl} target="_blank" rel="noreferrer">
-                        打开提示词
-                      </a>
-                    ) : null}
-                    {poster?.sourceUrl ? (
-                      <a className="share-btn share-btn-secondary" href={poster.sourceUrl} target="_blank" rel="noreferrer">
-                        打开源文档
-                      </a>
-                    ) : null}
                   </div>
 
                   <div className="share-config-grid">
@@ -879,7 +716,7 @@ function InfographicPage() {
                   </div>
 
                   <p className="share-note share-file-note">
-                    下载会优先使用当前生成的 SVG；新标签打开可用于快速检查最终构图，提示词与源文档用于二次迭代。
+                    海报生成后可直接在左侧预览；需要单独发送时，使用“复制当前链接”或“下载海报”即可。
                   </p>
                 </section>
               </aside>
@@ -903,15 +740,6 @@ function LoadingState() {
         <p className="share-lead">页面会先从服务端取回 run 数据，再补充当前页面所需的操作。</p>
       </div>
     </section>
-  )
-}
-
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <article className="share-stat">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </article>
   )
 }
 
@@ -964,7 +792,9 @@ function sanitizeFilename(value: string) {
 
 function buildPosterDownloadName(run: ArenaRun, poster: ArenaPosterAsset) {
   const baseName = sanitizeFilename(run.summary.title || run.runId) || run.runId
-  return `${baseName}-${poster.stylePreset}-${poster.aspectRatio.replace(/[:.]/g, '-')}.svg`
+  const extensionMatch = poster.imagePath.match(/\.([a-z0-9]+)$/i)
+  const extension = extensionMatch?.[1]?.toLowerCase() ?? 'svg'
+  return `${baseName}-${poster.stylePreset}-${poster.aspectRatio.replace(/[:.]/g, '-')}.${extension}`
 }
 
 function countRounds(messages: ArenaMessage[]) {
@@ -994,51 +824,6 @@ function groupMessagesByRound(messages: ArenaMessage[]) {
   return Array.from(grouped.entries())
     .sort(([left], [right]) => left - right)
     .map(([round, items]) => ({ round, messages: items }))
-}
-
-function buildTranscriptText(run: ArenaRun) {
-  const lines: string[] = [
-    `【${run.summary.title}】`,
-    `主题：${run.topic}`,
-    `模式：${run.mode === 'debate' ? '辩论' : '对谈'}`,
-    `状态：${run.status === 'interrupted' ? '已中断' : '已完成'}`,
-    `参与者：${run.participants.map((participant) => participant.displayName).join('、')}`,
-    '',
-    '摘要',
-    `- 共识：${run.summary.consensus}`,
-  ]
-
-  if (run.summary.moderatorNote) {
-    lines.push(`- 主持人备注：${run.summary.moderatorNote}`)
-  }
-
-  if (run.summary.debateVerdict) {
-    lines.push(`- 胜者：${run.summary.debateVerdict.winnerDisplayName ?? '未指明'}`)
-    lines.push(`- 裁判理由：${run.summary.debateVerdict.rationale}`)
-  }
-
-  lines.push('')
-  lines.push('分歧')
-  if (run.summary.disagreements.length > 0) {
-    lines.push(...run.summary.disagreements.map((item) => `- ${item}`))
-  } else {
-    lines.push('- 暂无显著分歧')
-  }
-
-  lines.push('')
-  lines.push('建议')
-  lines.push(...run.summary.actionableAdvice.map((item) => `- ${item}`))
-  lines.push('')
-  lines.push('回放')
-
-  for (const message of run.messages) {
-    const roundLabel = message.round ? `第 ${message.round} 轮` : '实时引导'
-    const phaseLabel = phaseLabels[message.phase ?? ''] ?? '消息'
-    const originLabel = message.kind === 'user' ? '引导' : message.stageLabel
-    lines.push(`- [${roundLabel} / ${phaseLabel}] ${message.displayName}（${originLabel}）：${message.content}`)
-  }
-
-  return lines.join('\n')
 }
 
 async function writeClipboardText(value: string) {

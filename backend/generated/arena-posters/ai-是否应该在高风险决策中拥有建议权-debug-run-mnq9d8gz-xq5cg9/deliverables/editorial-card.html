@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>把 AI 建议权锁进可审计的人类责任链</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@700;900&family=Noto+Sans+SC:wght@400;500;700&family=Oswald:wght@500;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --paper: #f5f3ed;
+  --ink: #111111;
+  --muted: #6b6b6b;
+  --accent: #c0392b;
+  --accent-dark: #922b21;
+  --tint: rgba(0,0,0,0.028);
+  --tint-warm: rgba(192,57,43,0.06);
+  --canvas-w: 1500px;
+  --canvas-h: 2000px;
+  --pad: 60px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{margin:0;background:var(--paper);width:100%;height:100%;}
+body{font-family:"Inter","Noto Sans SC","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;}
+
+.frame{width:var(--canvas-w);height:var(--canvas-h);}
+.card{
+  position:relative;width:100%;height:100%;
+  background:var(--paper);
+  padding:var(--pad);
+  overflow:hidden;
+  display:flex;flex-direction:column;
+  justify-content:space-between;
+}
+.card::before{
+  content:"";position:absolute;inset:0;pointer-events:none;opacity:0.035;
+  background-image:
+    radial-gradient(circle at 18% 22%,rgba(0,0,0,.75) .5px,transparent .8px),
+    radial-gradient(circle at 78% 44%,rgba(0,0,0,.65) .4px,transparent .7px);
+  background-size:7px 7px,10px 10px;
+}
+
+/* ── TOPBAR ── */
+.topbar{
+  display:flex;justify-content:space-between;align-items:center;
+  padding-bottom:20px;
+  border-bottom:2px solid var(--ink);
+  margin-bottom:28px;
+  flex-shrink:0;
+}
+.topbar-left{
+  font-family:"Oswald","Inter",sans-serif;
+  font-size:13px;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;
+  color:var(--muted);
+}
+.topbar-right{
+  font-size:12px;font-weight:600;
+  letter-spacing:.1em;color:var(--muted);
+}
+
+/* ── HERO ── */
+.hero{flex-shrink:0;margin-bottom:24px;}
+.hero-topic{
+  display:inline-block;
+  font-family:"Noto Sans SC","Inter",sans-serif;
+  font-size:13.5px;font-weight:700;
+  letter-spacing:.12em;
+  color:var(--accent);
+  border:2px solid var(--accent);
+  padding:4px 14px;
+  margin-bottom:18px;
+}
+.hero-title{
+  font-family:"Noto Serif SC","SimSun",serif;
+  font-size:76px;font-weight:900;
+  line-height:1.14;letter-spacing:-.02em;
+  color:var(--ink);
+  margin-bottom:18px;
+}
+.hero-bar{
+  width:100px;height:5px;
+  background:var(--accent);
+  margin-bottom:18px;
+}
+.hero-hook{
+  font-family:"Noto Serif SC",serif;
+  font-size:24px;line-height:1.65;
+  color:var(--ink);
+  font-weight:700;
+  font-style:italic;
+  padding:14px 0 14px 22px;
+  border-left:4px solid var(--accent);
+  margin-bottom:4px;
+}
+
+/* ── PARTICIPANTS STRIP ── */
+.participants-strip{
+  display:flex;gap:16px;
+  margin-bottom:26px;flex-shrink:0;
+}
+.participant{
+  flex:1;
+  padding:18px 22px;
+  background:var(--tint);
+  border-left:4px solid var(--ink);
+}
+.participant-role{
+  font-family:"Oswald","Inter",sans-serif;
+  font-size:12px;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);
+  margin-bottom:4px;
+}
+.participant-name{
+  font-family:"Noto Sans SC","Inter",sans-serif;
+  font-size:17px;font-weight:700;
+  color:var(--ink);
+}
+.participant-value{
+  font-size:13px;color:var(--muted);
+  margin-top:2px;
+}
+
+/* ── CONSENSUS (PRIMARY MODULE) ── */
+.consensus-block{
+  background:var(--ink);color:#fff;
+  padding:34px 38px;
+  margin-bottom:24px;flex-shrink:0;
+  position:relative;
+}
+.consensus-block::after{
+  content:"";position:absolute;top:0;right:0;
+  width:140px;height:100%;
+  background:linear-gradient(135deg,transparent 48%,var(--accent) 49%,var(--accent) 51%,transparent 52%);
+  opacity:.18;pointer-events:none;
+}
+.module-label{
+  font-family:"Oswald","Inter",sans-serif;
+  font-size:12px;font-weight:700;
+  letter-spacing:.2em;text-transform:uppercase;
+  margin-bottom:12px;
+}
+.consensus-block .module-label{color:var(--accent);opacity:.9;}
+.consensus-text{
+  font-family:"Noto Sans SC","Inter",sans-serif;
+  font-size:23px;line-height:1.7;
+  font-weight:500;
+}
+
+/* ── DIALOGUE BLOCK ── */
+.dialogue-block{
+  background:var(--tint-warm);
+  border-top:5px solid var(--accent);
+  padding:26px 30px;
+  margin-bottom:24px;flex-shrink:0;
+}
+.dialogue-block .module-label{color:var(--accent-dark);}
+.dialogue-item{
+  padding:10px 0;
+  border-bottom:1px solid rgba(0,0,0,.08);
+}
+.dialogue-item:last-child{border-bottom:none;}
+.dialogue-speaker{
+  font-family:"Noto Sans SC","Inter",sans-serif;
+  font-size:13px;font-weight:700;
+  color:var(--accent-dark);
+  margin-bottom:3px;
+}
+.dialogue-text{
+  font-family:"Noto Sans SC","Inter",sans-serif;
+  font-size:18.5px;line-height:1.6;
+  color:var(--ink);
+}
+
+/* ── LOWER TWO-COLUMN GRID ── */
+.lower-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:18px;
+  margin-bottom:22px;
+  flex-shrink:0;
+}
+.panel{
+  padding:26px 28px;
+  background:var(--tint);
+  border-top:5px solid var(--ink);
+}
+.panel .module-label{color:var(--muted);}
+.panel-list{
+  list-style:none;padding:0;margin:0;
+}
+.panel-list li{
+  font-family:"Noto Sans SC","Inter",sans-serif;
+  font-size:18px;line-height:1.6;
+  color:var(--ink);
+  padding:9px 0;
+  padding-left:20px;
+  position:relative;
+}
+.panel-list li::before{
+  content:"";
+  position:absolute;left:0;top:14px;
+  width:8px;height:8px;
+  background:var(--accent);
+}
+.panel-action{border-top-color:var(--accent);}
+
+/* ── VERDICT ── */
+.verdict-block{
+  display:flex;align-items:stretch;
+  margin-bottom:22px;flex-shrink:0;
+  background:var(--tint);
+  border:2px solid var(--ink);
+}
+.verdict-winner{
+  background:var(--ink);color:#fff;
+  padding:28px 34px;
+  display:flex;flex-direction:column;
+  justify-content:center;
+  min-width:260px;
+}
+.verdict-winner .module-label{color:var(--accent);}
+.verdict-winner-name{
+  font-family:"Noto Serif SC",serif;
+  font-size:32px;font-weight:900;
+  line-height:1.2;
+}
+.verdict-reason{
+  flex:1;padding:28px 34px;
+  display:flex;flex-direction:column;
+  justify-content:center;
+}
+.verdict-reason .module-label{color:var(--muted);}
+.verdict-reason-text{
+  font-family:"Noto Sans SC","Inter",sans-serif;
+  font-size:20px;line-height:1.65;
+  color:var(--ink);
+}
+
+/* ── FOOTER ── */
+.footer{
+  margin-top:auto;
+  display:flex;justify-content:space-between;align-items:flex-end;
+  padding-top:18px;
+  border-top:2px solid var(--ink);
+  flex-shrink:0;
+}
+.footer-left{
+  font-size:11.5px;font-weight:600;
+  letter-spacing:.1em;color:var(--muted);
+  line-height:1.6;
+}
+.footer-right{
+  font-family:"Oswald","Inter",sans-serif;
+  font-size:42px;font-weight:700;
+  color:rgba(0,0,0,.06);
+  line-height:1;
+}
+
+@media(max-width:800px){
+  .frame{width:100%!important;height:auto!important;}
+  .card{padding:24px;}
+  .hero-title{font-size:36px;}
+  .lower-grid{grid-template-columns:1fr;}
+  .verdict-block{flex-direction:column;}
+}
+</style>
+</head>
+<body>
+<main class="frame">
+<article class="card">
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <span class="topbar-left">Cross-Temporal Arena /// 跨时空讨论</span>
+    <span class="topbar-right">2026-04-09 &#183; Editorial Infographic</span>
+  </header>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-topic">议题 &mdash; AI 是否应该在高风险决策中拥有建议权</div>
+    <h1 class="hero-title">把 AI 建议权锁进<br/>可审计的人类责任链</h1>
+    <div class="hero-bar"></div>
+    <p class="hero-hook">&ldquo;真正的争论不是让不让 AI 说话，<br/>而是谁为它的话负责。&rdquo;</p>
+  </section>
+
+  <!-- PARTICIPANTS -->
+  <section class="participants-strip">
+    <div class="participant">
+      <p class="participant-role">方法派</p>
+      <p class="participant-name">青年研究者</p>
+      <p class="participant-value">核心价值：证据</p>
+    </div>
+    <div class="participant">
+      <p class="participant-role">治理派</p>
+      <p class="participant-name">公共政策官员</p>
+      <p class="participant-value">核心价值：问责</p>
+    </div>
+  </section>
+
+  <!-- CONSENSUS (HEAVY PRIMARY) -->
+  <section class="consensus-block">
+    <p class="module-label">共识 &mdash; Consensus</p>
+    <p class="consensus-text">AI 可以参与高风险决策辅助，但不能脱离<strong>人工签字</strong>、<strong>过程留痕</strong>与<strong>责任归属</strong>。</p>
+  </section>
+
+  <!-- KEY DIALOGUE -->
+  <section class="dialogue-block">
+    <p class="module-label">关键对话 &mdash; Key Dialogue</p>
+    <div class="dialogue-item">
+      <p class="dialogue-speaker">青年研究者（方法派）</p>
+      <p class="dialogue-text">AI 可以提供高维线索，但必须保留人工复核与审计。</p>
+    </div>
+    <div class="dialogue-item">
+      <p class="dialogue-speaker">公共政策官员（治理派）</p>
+      <p class="dialogue-text">只要责任不能明确落到人类主体，就不该进入高风险流程。</p>
+    </div>
+  </section>
+
+  <!-- LOWER GRID: DISAGREEMENTS + ACTIONABLE -->
+  <section class="lower-grid">
+    <div class="panel">
+      <p class="module-label">尚存分歧 &mdash; Disagreements</p>
+      <ul class="panel-list">
+        <li>人工复核的强制程度应多高</li>
+        <li>哪些行业可以先试点</li>
+      </ul>
+    </div>
+    <div class="panel panel-action">
+      <p class="module-label">行动建议 &mdash; Actions</p>
+      <ul class="panel-list">
+        <li>把建议、证据、签字分成三段式流程</li>
+        <li>先在低外部性场景试点</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- VERDICT -->
+  <section class="verdict-block">
+    <div class="verdict-winner">
+      <p class="module-label">裁定胜者 &mdash; Verdict</p>
+      <p class="verdict-winner-name">公共政策官员</p>
+    </div>
+    <div class="verdict-reason">
+      <p class="module-label">裁定理由 &mdash; Reasoning</p>
+      <p class="verdict-reason-text">其论证更完整地覆盖了责任归属与制度约束，在高风险决策的治理框架中更具说服力。</p>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="footer-left">
+      来源：跨时空讨论竞技场<br/>
+      source-把-ai-建议权锁进可审计的人类责任链.md
+    </div>
+    <div class="footer-right">3:4</div>
+  </footer>
+
+</article>
+</main>
+</body>
+</html>

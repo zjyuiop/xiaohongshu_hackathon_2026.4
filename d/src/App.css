@@ -1,18 +1,18 @@
 :root {
-  --share-bg: #040b16;
-  --share-bg-2: #101b2f;
-  --share-paper: rgba(250, 245, 236, 0.94);
-  --share-paper-strong: rgba(255, 251, 245, 0.98);
-  --share-ink: #0c1726;
-  --share-muted: #5c6979;
-  --share-line: rgba(13, 23, 38, 0.12);
-  --share-line-strong: rgba(13, 23, 38, 0.2);
-  --share-accent: #62e6f5;
-  --share-accent-2: #f3b15e;
-  --share-accent-3: #ff6f91;
-  --share-success: #1e9b67;
-  --share-warning: #d97706;
-  --share-shadow: 0 32px 70px rgba(3, 8, 20, 0.36);
+  --share-bg: #f4eee3;
+  --share-bg-2: #e7ddd0;
+  --share-paper: rgba(255, 250, 244, 0.94);
+  --share-paper-strong: rgba(255, 252, 247, 0.98);
+  --share-ink: #1e2933;
+  --share-muted: #62707b;
+  --share-line: rgba(30, 41, 51, 0.1);
+  --share-line-strong: rgba(30, 41, 51, 0.18);
+  --share-accent: #264653;
+  --share-accent-2: #c47b48;
+  --share-accent-3: #a44a3f;
+  --share-success: #2d7a57;
+  --share-warning: #b06d1f;
+  --share-shadow: 0 28px 60px rgba(63, 51, 38, 0.12);
   --share-radius-xl: 34px;
   --share-radius-lg: 24px;
   --share-radius-md: 18px;
@@ -30,9 +30,9 @@ html, body, #root {
   overflow: hidden;
   color: var(--share-ink);
   background:
-    radial-gradient(circle at top left, rgba(103, 232, 249, 0.12), transparent 34%),
-    radial-gradient(circle at 82% 16%, rgba(255, 184, 107, 0.14), transparent 28%),
-    radial-gradient(circle at 70% 80%, rgba(255, 107, 139, 0.09), transparent 24%),
+    radial-gradient(circle at top left, rgba(38, 70, 83, 0.08), transparent 34%),
+    radial-gradient(circle at 82% 16%, rgba(196, 123, 72, 0.12), transparent 28%),
+    radial-gradient(circle at 70% 80%, rgba(164, 74, 63, 0.08), transparent 24%),
     linear-gradient(180deg, var(--share-bg) 0%, var(--share-bg-2) 100%);
 }
 
@@ -42,8 +42,8 @@ html, body, #root {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    linear-gradient(rgba(38, 70, 83, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(38, 70, 83, 0.03) 1px, transparent 1px);
   background-size: 84px 84px;
   mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.7), transparent 90%);
   pointer-events: none;
@@ -54,11 +54,11 @@ html, body, #root {
   inset: -120px;
   pointer-events: none;
   background:
-    radial-gradient(circle at 14% 18%, rgba(103, 232, 249, 0.16), transparent 28%),
-    radial-gradient(circle at 82% 12%, rgba(255, 184, 107, 0.18), transparent 26%),
-    radial-gradient(circle at 52% 88%, rgba(255, 107, 139, 0.12), transparent 28%);
-  filter: blur(16px) saturate(110%);
-  opacity: 0.95;
+    radial-gradient(circle at 14% 18%, rgba(38, 70, 83, 0.12), transparent 28%),
+    radial-gradient(circle at 82% 12%, rgba(196, 123, 72, 0.14), transparent 26%),
+    radial-gradient(circle at 52% 88%, rgba(164, 74, 63, 0.08), transparent 28%);
+  filter: blur(20px) saturate(106%);
+  opacity: 0.88;
 }
 
 .share-shell {
@@ -85,11 +85,12 @@ html, body, #root {
   display: inline-flex;
   align-items: center;
   gap: 12px;
-  color: rgba(255, 255, 255, 0.94);
+  color: var(--share-accent);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   font-family: 'IBM Plex Mono', monospace;
   font-size: 0.78rem;
+  font-weight: 700;
 }
 
 .share-brand-mark {
@@ -97,7 +98,7 @@ html, body, #root {
   height: 14px;
   border-radius: 999px;
   background: linear-gradient(135deg, var(--share-accent), var(--share-accent-2));
-  box-shadow: 0 0 24px rgba(103, 232, 249, 0.45);
+  box-shadow: 0 0 24px rgba(38, 70, 83, 0.18);
 }
 
 .share-topbar-right {
@@ -111,9 +112,9 @@ html, body, #root {
 .share-topbar-chip {
   padding: 9px 14px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  color: rgba(255, 255, 255, 0.82);
-  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(30, 41, 51, 0.1);
+  color: var(--share-muted);
+  background: rgba(255, 255, 255, 0.5);
   font-size: 0.8rem;
   font-family: 'IBM Plex Mono', monospace;
   backdrop-filter: blur(10px);
@@ -151,21 +152,21 @@ html, body, #root {
 }
 
 .share-btn-primary {
-  color: #07111f;
-  background: linear-gradient(135deg, var(--share-accent), #c4f7ff);
-  box-shadow: 0 16px 30px rgba(103, 232, 249, 0.2);
+  color: #fffaf3;
+  background: linear-gradient(135deg, var(--share-accent), #355f71);
+  box-shadow: 0 16px 30px rgba(38, 70, 83, 0.18);
 }
 
 .share-btn-secondary {
-  color: rgba(255, 255, 255, 0.92);
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.14);
+  color: var(--share-ink);
+  background: rgba(255, 255, 255, 0.64);
+  border-color: rgba(30, 41, 51, 0.1);
   backdrop-filter: blur(12px);
 }
 
 .share-btn-secondary:hover:not(:disabled) {
-  border-color: rgba(255, 255, 255, 0.24);
-  box-shadow: 0 16px 28px rgba(0, 0, 0, 0.16);
+  border-color: rgba(38, 70, 83, 0.22);
+  box-shadow: 0 16px 28px rgba(63, 51, 38, 0.08);
 }
 
 .share-hero,
@@ -174,6 +175,14 @@ html, body, #root {
   grid-template-columns: minmax(0, 1.35fr) minmax(340px, 0.95fr);
   gap: 20px;
   align-items: stretch;
+}
+
+.share-hero-focused {
+  grid-template-columns: minmax(0, 1.32fr) minmax(280px, 0.78fr);
+}
+
+.share-hero-solo {
+  grid-template-columns: 1fr;
 }
 
 .share-hero {
@@ -186,9 +195,9 @@ html, body, #root {
 .landing-card,
 .share-card {
   background:
-    linear-gradient(145deg, rgba(255, 253, 249, 0.94), rgba(248, 242, 233, 0.92)),
-    repeating-linear-gradient(45deg, rgba(13, 23, 38, 0.015) 0 2px, transparent 2px 11px);
-  border: 1px solid rgba(13, 23, 38, 0.12);
+    linear-gradient(145deg, rgba(255, 252, 246, 0.96), rgba(245, 236, 225, 0.92)),
+    repeating-linear-gradient(45deg, rgba(38, 70, 83, 0.012) 0 2px, transparent 2px 11px);
+  border: 1px solid rgba(30, 41, 51, 0.1);
   box-shadow: var(--share-shadow);
 }
 
@@ -208,16 +217,16 @@ html, body, #root {
   width: 320px;
   height: 320px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(103, 232, 249, 0.16), transparent 62%);
+  background: radial-gradient(circle, rgba(196, 123, 72, 0.14), transparent 62%);
   pointer-events: none;
 }
 
 .share-hero-aside {
   border-radius: var(--share-radius-xl);
   background:
-    linear-gradient(160deg, rgba(12, 22, 39, 0.96), rgba(8, 15, 28, 0.92)),
-    radial-gradient(circle at top right, rgba(98, 230, 245, 0.15), transparent 32%);
-  border: 1px solid rgba(255, 255, 255, 0.11);
+    linear-gradient(160deg, rgba(39, 56, 66, 0.96), rgba(28, 40, 48, 0.92)),
+    radial-gradient(circle at top right, rgba(196, 123, 72, 0.18), transparent 32%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: var(--share-shadow);
   padding: 22px;
   display: flex;
@@ -228,7 +237,7 @@ html, body, #root {
 
 .share-kicker {
   margin: 0 0 14px;
-  color: #0b6f82;
+  color: #7a5436;
   font-family: 'IBM Plex Mono', monospace;
   font-size: 0.74rem;
   letter-spacing: 0.24em;
@@ -253,7 +262,14 @@ html, body, #root {
   max-width: 72ch;
   font-size: 1.02rem;
   line-height: 1.88;
-  color: #314457;
+  color: #445462;
+}
+
+.share-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 24px;
 }
 
 .share-chip-row {
@@ -266,9 +282,9 @@ html, body, #root {
 .share-chip {
   padding: 8px 12px;
   border-radius: 999px;
-  border: 1px solid rgba(13, 23, 38, 0.12);
+  border: 1px solid rgba(30, 41, 51, 0.1);
   background: rgba(255, 255, 255, 0.76);
-  color: #244057;
+  color: #35505f;
   font-family: 'IBM Plex Mono', monospace;
   font-size: 0.77rem;
 }
@@ -405,7 +421,7 @@ html, body, #root {
 
 .share-card-eyebrow {
   margin: 0 0 8px;
-  color: #0b6f82;
+  color: #7a5436;
   font-family: 'IBM Plex Mono', monospace;
   font-size: 0.7rem;
   letter-spacing: 0.22em;
@@ -442,6 +458,11 @@ html, body, #root {
   line-height: 1.8;
 }
 
+.share-note-strong {
+  font-size: 1rem;
+  color: #384753;
+}
+
 .share-file-note {
   margin-top: 14px;
 }
@@ -458,20 +479,31 @@ html, body, #root {
   gap: 14px;
 }
 
+.share-story-stack {
+  display: grid;
+  gap: 20px;
+}
+
+.share-focus-card {
+  background:
+    linear-gradient(145deg, rgba(255, 252, 247, 0.97), rgba(244, 235, 224, 0.92)),
+    rgba(255, 255, 255, 0.72);
+}
+
 .share-subcard {
   min-height: 100%;
   padding: 18px;
   border-radius: 20px;
-  border: 1px solid rgba(13, 23, 38, 0.1);
+  border: 1px solid rgba(30, 41, 51, 0.08);
   background: rgba(255, 255, 255, 0.64);
-  box-shadow: 0 12px 24px rgba(7, 17, 31, 0.05);
+  box-shadow: 0 12px 24px rgba(63, 51, 38, 0.05);
 }
 
 .share-mini-title {
   margin: 0 0 10px;
   font-size: 0.82rem;
   font-family: 'IBM Plex Mono', monospace;
-  color: #0b6f82;
+  color: #7a5436;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -500,8 +532,8 @@ html, body, #root {
   align-self: flex-start;
   padding: 7px 10px;
   border-radius: 999px;
-  background: rgba(11, 111, 130, 0.12);
-  color: #0b6f82;
+  background: rgba(38, 70, 83, 0.1);
+  color: var(--share-accent);
   font-family: 'IBM Plex Mono', monospace;
   font-size: 0.72rem;
   letter-spacing: 0.08em;
@@ -510,17 +542,17 @@ html, body, #root {
 
 .share-message {
   border-radius: 20px;
-  border: 1px solid rgba(13, 23, 38, 0.1);
+  border: 1px solid rgba(30, 41, 51, 0.08);
   background: rgba(255, 255, 255, 0.76);
   padding: 15px 16px 16px;
-  box-shadow: 0 12px 26px rgba(7, 17, 31, 0.05);
+  box-shadow: 0 12px 26px rgba(63, 51, 38, 0.05);
 }
 
 .share-message-user {
   background:
-    linear-gradient(145deg, rgba(103, 232, 249, 0.08), rgba(255, 255, 255, 0.8)),
+    linear-gradient(145deg, rgba(38, 70, 83, 0.07), rgba(255, 255, 255, 0.8)),
     rgba(255, 255, 255, 0.78);
-  border-color: rgba(103, 232, 249, 0.26);
+  border-color: rgba(38, 70, 83, 0.18);
 }
 
 .share-message-support {
@@ -546,13 +578,13 @@ html, body, #root {
   margin-bottom: 10px;
   font-family: 'IBM Plex Mono', monospace;
   font-size: 0.72rem;
-  color: #4a6076;
+  color: #556473;
 }
 
 .share-message-meta span {
   padding: 4px 7px;
   border-radius: 999px;
-  border: 1px solid rgba(13, 23, 38, 0.12);
+  border: 1px solid rgba(30, 41, 51, 0.08);
   background: rgba(255, 255, 255, 0.64);
 }
 
@@ -645,7 +677,7 @@ html, body, #root {
   justify-content: space-between;
   gap: 12px;
   padding: 12px 0;
-  border-bottom: 1px solid rgba(13, 23, 38, 0.1);
+  border-bottom: 1px solid rgba(30, 41, 51, 0.08);
   font-size: 0.86rem;
 }
 
@@ -688,7 +720,7 @@ html, body, #root {
   min-width: 0;
   padding: 10px 12px;
   border-radius: 16px;
-  border: 1px solid rgba(13, 23, 38, 0.12);
+  border: 1px solid rgba(30, 41, 51, 0.1);
   background: rgba(255, 255, 255, 0.72);
   cursor: pointer;
   text-align: left;
@@ -701,13 +733,13 @@ html, body, #root {
 
 .share-pill:hover {
   transform: translateY(-1px);
-  border-color: rgba(11, 111, 130, 0.34);
+  border-color: rgba(38, 70, 83, 0.28);
 }
 
 .share-pill.active {
-  background: rgba(11, 111, 130, 0.12);
-  border-color: rgba(11, 111, 130, 0.34);
-  box-shadow: 0 12px 24px rgba(11, 111, 130, 0.12);
+  background: rgba(38, 70, 83, 0.1);
+  border-color: rgba(38, 70, 83, 0.3);
+  box-shadow: 0 12px 24px rgba(38, 70, 83, 0.1);
 }
 
 .share-pill span {
@@ -803,9 +835,9 @@ html, body, #root {
   padding: 18px;
   border-radius: 28px;
   background:
-    radial-gradient(circle at top, rgba(98, 230, 245, 0.14), transparent 32%),
-    linear-gradient(180deg, rgba(12, 22, 39, 0.96), rgba(8, 15, 28, 0.92));
-  border: 1px solid rgba(255, 255, 255, 0.08);
+    radial-gradient(circle at top, rgba(196, 123, 72, 0.14), transparent 32%),
+    linear-gradient(180deg, rgba(37, 53, 61, 0.96), rgba(24, 35, 42, 0.92));
+  border: 1px solid rgba(255, 255, 255, 0.1);
   transition:
     transform 160ms ease,
     box-shadow 160ms ease,
@@ -814,8 +846,8 @@ html, body, #root {
 
 .infographic-preview-shell:hover {
   transform: translateY(-2px);
-  border-color: rgba(98, 230, 245, 0.18);
-  box-shadow: 0 28px 48px rgba(7, 17, 31, 0.28);
+  border-color: rgba(196, 123, 72, 0.24);
+  box-shadow: 0 28px 48px rgba(63, 51, 38, 0.2);
 }
 
 .infographic-preview-frame {
@@ -867,9 +899,9 @@ html, body, #root {
   text-align: center;
   padding: 24px;
   border-radius: 24px;
-  border: 1px dashed rgba(13, 23, 38, 0.16);
+  border: 1px dashed rgba(30, 41, 51, 0.14);
   background:
-    radial-gradient(circle at top, rgba(103, 232, 249, 0.12), transparent 38%),
+    radial-gradient(circle at top, rgba(196, 123, 72, 0.1), transparent 38%),
     rgba(255, 255, 255, 0.55);
 }
 
@@ -897,10 +929,10 @@ html, body, #root {
   width: 68px;
   height: 68px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(103, 232, 249, 0.8), rgba(103, 232, 249, 0.12) 68%, transparent 70%);
+  background: radial-gradient(circle, rgba(38, 70, 83, 0.7), rgba(38, 70, 83, 0.12) 68%, transparent 70%);
   box-shadow:
-    0 0 0 10px rgba(103, 232, 249, 0.08),
-    0 0 48px rgba(103, 232, 249, 0.36);
+    0 0 0 10px rgba(38, 70, 83, 0.08),
+    0 0 48px rgba(38, 70, 83, 0.24);
   animation: sharePulse 1.8s ease-in-out infinite;
 }
 
@@ -923,12 +955,41 @@ html, body, #root {
   padding: 12px 16px;
   border-radius: 999px;
   color: rgba(255, 255, 255, 0.96);
-  background: rgba(7, 17, 31, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: 0 16px 34px rgba(3, 8, 20, 0.32);
+  background: rgba(39, 56, 66, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 16px 34px rgba(63, 51, 38, 0.22);
   font-family: 'IBM Plex Mono', monospace;
   font-size: 0.78rem;
   letter-spacing: 0.03em;
+}
+
+.share-cast-panel {
+  justify-content: flex-start;
+}
+
+.share-cast-list {
+  display: grid;
+  gap: 10px;
+}
+
+.share-cast-item {
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.share-cast-item strong {
+  display: block;
+  font-size: 0.98rem;
+  line-height: 1.4;
+}
+
+.share-cast-item span {
+  display: block;
+  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.86rem;
 }
 
 .landing-hero {
@@ -1146,7 +1207,8 @@ html, body, #root {
 
   .landing-form-row,
   .share-inline-actions,
-  .share-poster-links {
+  .share-poster-links,
+  .share-hero-actions {
     flex-direction: column;
   }
 

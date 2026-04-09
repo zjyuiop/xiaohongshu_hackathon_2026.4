@@ -1058,6 +1058,25 @@
   color: #3e56b8;
 }
 
+.output-card {
+  gap: 0;
+}
+
+.output-card-button {
+  width: 100%;
+  margin-top: 16px;
+  justify-content: center;
+}
+
+.output-card-empty {
+  margin-top: 14px;
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px dashed rgba(98, 120, 168, 0.18);
+  background: rgba(255, 255, 255, 0.68);
+  text-align: center;
+}
+
 .meta-grid {
   margin-top: 16px;
 }
@@ -1087,6 +1106,7 @@
   border-radius: 18px;
   border: 1px solid rgba(98, 120, 168, 0.14);
   background: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 20px 34px rgba(101, 116, 154, 0.1);
 }
 
 .link-hint {

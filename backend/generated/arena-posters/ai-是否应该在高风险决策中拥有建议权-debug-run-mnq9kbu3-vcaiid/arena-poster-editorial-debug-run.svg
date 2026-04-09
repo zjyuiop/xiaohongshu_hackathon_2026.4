@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1200" height="1600" viewBox="0 0 1200 1600" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="1600" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#faf7f0" />
+      <stop offset="1" stop-color="#efe7d4" />
+    </linearGradient>
+    <radialGradient id="glowA" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(936 288) rotate(90) scale(448.00000000000006 216)">
+      <stop stop-color="#7c3aed" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#7c3aed" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowB" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(216 1216) rotate(90) scale(352 192)">
+      <stop stop-color="#ffffff" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="scanline" patternUnits="userSpaceOnUse" width="8" height="8">
+      <rect width="8" height="8" fill="transparent"/>
+      <rect y="0" width="8" height="1" fill="rgba(17, 24, 39, 0.06)"/>
+    </pattern>
+    <pattern id="grid" width="42" height="42" patternUnits="userSpaceOnUse">
+      <path d="M 42 0 L 0 0 0 42" fill="none" stroke="rgba(17, 24, 39, 0.06)" stroke-width="1"/>
+    </pattern>
+    <linearGradient id="holo" x1="0" y1="0" x2="1200" y2="1600" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#38bdf8" stop-opacity="0.24"/>
+      <stop offset="0.35" stop-color="#22d3ee" stop-opacity="0.05"/>
+      <stop offset="0.7" stop-color="#f472b6" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#0ea5e9" stop-opacity="0.20"/>
+    </linearGradient>
+    <filter id="halo" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="12" />
+    </filter>
+    <filter id="sharpGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="1200" height="1600" rx="48" fill="url(#bg)" />
+  <rect width="1200" height="1600" rx="48" fill="url(#glowA)" />
+  <rect width="1200" height="1600" rx="48" fill="url(#glowB)" />
+  <rect width="1200" height="1600" rx="48" fill="url(#holo)" />
+  <rect width="1200" height="1600" rx="48" fill="url(#scanline)" />
+  <rect width="1200" height="1600" rx="48" fill="url(#grid)" opacity="0.55" />
+  <rect x="70" y="70" width="1060" height="1460" rx="36" stroke="rgba(17, 24, 39, 0.10)" />
+  <ellipse cx="936" cy="384" rx="205" ry="112" fill="none" stroke="rgba(124, 58, 237, 0.12)" stroke-width="2.5" stroke-dasharray="16 14" filter="url(#halo)" />
+  <ellipse cx="840" cy="448.00000000000006" rx="280" ry="166" fill="none" stroke="rgba(17, 24, 39, 0.10)" stroke-width="1.5" stroke-dasharray="4 12" opacity="0.55" />
+  <circle cx="960" cy="336" r="8" fill="#7c3aed" filter="url(#sharpGlow)" />
+  <circle cx="804" cy="544" r="5" fill="#7c3aed" opacity="0.75" />
+  <rect x="92" y="168" width="1016" height="360" rx="36" fill="rgba(255, 255, 255, 0.58)" stroke="rgba(17, 24, 39, 0.10)" filter="url(#halo)" />
+  <rect x="112" y="186" width="976" height="324" rx="28" fill="rgba(255, 255, 255, 0.72)" stroke="rgba(255,255,255,0.02)" />
+  <text x="110" y="132" fill="#7c3aed" font-size="26" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace" letter-spacing="4">TIME PERSONA ARENA</text>
+  <text x="1090" y="132" fill="#475569" font-size="22" text-anchor="end" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace">COMPLETED</text>
+  <rect x="110" y="118" width="232" height="40" rx="20" fill="rgba(255, 255, 255, 0.72)" stroke="rgba(17, 24, 39, 0.10)" /><text x="128" y="146" fill="#475569" font-size="18" font-weight="500" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace">STATUS / COMPLETED</text><rect x="356" y="118" width="177" height="40" rx="20" fill="rgba(124, 58, 237, 0.12)" stroke="rgba(17, 24, 39, 0.10)" /><text x="374" y="146" fill="#475569" font-size="18" font-weight="500" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace">MODE / DEBATE</text><rect x="547" y="118" width="122" height="40" rx="20" fill="rgba(255, 255, 255, 0.72)" stroke="rgba(17, 24, 39, 0.10)" /><text x="565" y="146" fill="#475569" font-size="18" font-weight="500" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace">CAST / 2</text>
+  <text x="110" y="255" fill="#111827" font-size="66" font-weight="700" font-family="'Noto Sans SC','PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif"><tspan x="110" dy="0">把 AI</tspan><tspan x="110" dy="82">建议权锁进可审计的人</tspan><tspan x="110" dy="82">类责任链</tspan></text>
+  <text x="110" y="490" fill="#475569" font-size="28" font-family="'Noto Sans SC','PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif"><tspan x="110" dy="0">AI</tspan><tspan x="110" dy="38">可以参与高风险决策辅助，但不能脱离人</tspan><tspan x="110" dy="38">工签字、过程留痕与责任归属。</tspan></text>
+  <text x="110" y="494" fill="#475569" font-size="22" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace">SUMMARY / 真正的争论不是让不让 AI 说话，而是谁为它的话负责。</text>
+  <text x="110" y="1010" fill="#111827" font-size="24" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace">TOPIC / AI 是否应该在高风险决策中拥有建议权</text>
+  <text x="1090" y="494" fill="#475569" font-size="20" text-anchor="end" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace">PROMPT / 围绕“AI 是否应该在高风险决策中拥有建议权”的跨时空人格讨论海报，突出冲突、判断、成长与决断感。</text>
+  <path d="M 110 224 L 1090 224" stroke="rgba(17, 24, 39, 0.10)" stroke-dasharray="8 12" />
+  <rect x="110" y="1072" width="320" height="40" rx="20" fill="rgba(124, 58, 237, 0.12)" stroke="rgba(17, 24, 39, 0.10)" /><text x="128" y="1100" fill="#475569" font-size="18" font-weight="500" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace">青年研究者 · 方法派</text><rect x="470" y="1072" width="320" height="40" rx="20" fill="rgba(124, 58, 237, 0.12)" stroke="rgba(17, 24, 39, 0.10)" /><text x="488" y="1100" fill="#475569" font-size="18" font-weight="500" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace">公共政策官员 · 治理派</text>
+  <circle cx="124" cy="1263" r="6" fill="#7c3aed" /><text x="146" y="1270" fill="#475569" font-size="27" font-family="'Noto Sans SC','PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif">将结论转成下一步执行节奏</text><circle cx="124" cy="1319" r="6" fill="#7c3aed" /><text x="146" y="1326" fill="#475569" font-size="27" font-family="'Noto Sans SC','PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif">把建议、证据、签字分成三段式流程</text><circle cx="124" cy="1375" r="6" fill="#7c3aed" /><text x="146" y="1382" fill="#475569" font-size="27" font-family="'Noto Sans SC','PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif">先在低外部性场景试点</text>
+  <text x="110" y="1480" fill="#475569" font-size="23" font-family="'JetBrains Mono','SFMono-Regular',Menlo,monospace">debug-run</text>
+</svg>

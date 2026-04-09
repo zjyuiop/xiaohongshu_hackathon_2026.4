@@ -1,0 +1,53 @@
+{
+  "system": "你是高级视觉策划与文案导演。 请把一场多人格讨论转成适合“全息海报”的中文文案方案。 风格要像未来 HUD / 赛博展陈，而不是普通宣传页。 这是一个已完成的讨论，语气可以更完整、更收束。 只输出 JSON，不要输出 markdown，不要解释。",
+  "user": {
+    "language": "zh-CN",
+    "stylePreset": "editorial",
+    "aspectRatio": "3:4",
+    "status": "completed",
+    "topic": "AI 是否应该在高风险决策中拥有建议权",
+    "summaryTitle": "把 AI 建议权锁进可审计的人类责任链",
+    "consensus": "AI 可以参与高风险决策辅助，但不能脱离人工签字、过程留痕与责任归属。",
+    "narrativeHook": "真正的争论不是让不让 AI 说话，而是谁为它的话负责。",
+    "moderatorNote": "两方都接受辅助定位，但对放权边界分歧明显。",
+    "debateVerdict": {
+      "winnerDisplayName": "公共政策官员",
+      "rationale": "其论证更完整地覆盖了责任归属与制度约束。"
+    },
+    "participants": [
+      {
+        "displayName": "青年研究者",
+        "stageLabel": "方法派",
+        "values": [
+          "证据"
+        ]
+      },
+      {
+        "displayName": "公共政策官员",
+        "stageLabel": "治理派",
+        "values": [
+          "问责"
+        ]
+      }
+    ],
+    "actionableAdvice": [
+      "把建议、证据、签字分成三段式流程",
+      "先在低外部性场景试点"
+    ],
+    "transcriptSnippet": [
+      "青年研究者 · OPENING · AI 可以提供高维线索，但必须保留人工复核与审计。",
+      "公共政策官员 · OPENING · 只要责任不能明确落到人类主体，就不该进入高风险流程。"
+    ]
+  },
+  "schemaHint": {
+    "title": "string",
+    "subtitle": "string",
+    "kicker": "string",
+    "bullets": [
+      "string",
+      "string",
+      "string"
+    ],
+    "visualPrompt": "string"
+  }
+}

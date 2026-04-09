@@ -97,6 +97,14 @@ function formatTimestamp(value?: string): string {
   }).format(date)
 }
 
+function buildInfographicPageUrl(runId: string): string {
+  const params = new URLSearchParams({
+    style: 'poster',
+    ratio: '3:4',
+  })
+  return `/share/${encodeURIComponent(runId)}/infographic?${params.toString()}`
+}
+
 const phaseLabels: Record<ArenaPhase, string> = {
   opening: '开场',
   reflection: '反思',
@@ -782,91 +790,60 @@ function OutputPanel({
   links,
   poster,
   posterLoading,
-  onLoadRun,
   onGeneratePoster,
   onOpenShare,
-  onCopyShare,
+  onOpenPoster,
 }: {
   currentRun: ArenaRun | null
   links?: ArenaOutputLinks
   poster: ArenaPosterResponse | null
   posterLoading: boolean
-  onLoadRun: (runId: string) => void
   onGeneratePoster: () => void
   onOpenShare: () => void
-  onCopyShare: () => void
+  onOpenPoster: () => void
 }) {
   return (
     <section className="output-stack">
       {currentRun ? (
         <>
-          <section className="panel-block">
-            <div className="panel-kicker">结论摘要</div>
-            <h3 className="summary-title">{currentRun.summary.title}</h3>
-            <p className="summary-copy">{currentRun.summary.consensus}</p>
-            <div className="summary-list">
-              {currentRun.summary.actionableAdvice.slice(0, 3).map((item) => (
-                <span className="summary-chip" key={item}>
-                  {item}
-                </span>
-              ))}
-            </div>
-          </section>
-
-          <section className="panel-block">
-            <div className="panel-kicker">快速动作</div>
-            <div className="action-grid">
-              <button className="action-button" onClick={onOpenShare} type="button">
-                打开分享页
-              </button>
-              <button className="action-button" onClick={onCopyShare} type="button">
-                复制分享链接
-              </button>
-              <button className="action-button" disabled={posterLoading} onClick={onGeneratePoster} type="button">
-                {posterLoading ? '生成中...' : '生成全息海报'}
-              </button>
-              <button className="action-button" onClick={() => onLoadRun(currentRun.runId)} type="button">
-                重新载入本次结果
-              </button>
-            </div>
-            <div className="meta-grid">
-              <div>
-                <span>Session</span>
-                <strong>{currentRun.sessionId ?? currentRun.runId}</strong>
-              </div>
-              <div>
-                <span>模式</span>
-                <strong>{currentRun.mode}</strong>
-              </div>
-              <div>
-                <span>轮数</span>
-                <strong>{currentRun.config?.roundCount ?? '未记录'}</strong>
-              </div>
-              <div>
-                <span>时间</span>
-                <strong>{formatTimestamp(currentRun.createdAt)}</strong>
-              </div>
-            </div>
+          <section className="panel-block output-card">
+            <div className="panel-kicker">分享页面</div>
+            <h3 className="summary-title">给人看的结果页</h3>
+            <p className="summary-copy">
+              这里只保留结论、参与角色和关键片段，适合直接发给别人，不再塞一堆运行参数。
+            </p>
+            <button className="action-button action-button-primary output-card-button" onClick={onOpenShare} type="button">
+              打开分享页面
+            </button>
             {links?.suggestedSharePath ? <small className="link-hint">{buildSuggestedShareUrl(links, currentRun.runId)}</small> : null}
           </section>
 
-          {poster ? (
-            <section className="panel-block">
-              <div className="panel-kicker">海报输出</div>
-              <h3 className="summary-title">{poster.poster.title}</h3>
-              <p className="summary-copy">{poster.poster.summary}</p>
-              {poster.poster.imageUrl ? (
-                <img alt={poster.poster.title} className="poster-preview" src={poster.poster.imageUrl} />
-              ) : (
-                <div className="empty-note">海报已生成，但当前没有可直接访问的公开 URL。</div>
-              )}
-            </section>
-          ) : null}
+          <section className="panel-block output-card">
+            <div className="panel-kicker">信息图海报</div>
+            <h3 className="summary-title">{poster?.poster.title ?? '一张可以直接发出去的图'}</h3>
+            <p className="summary-copy">
+              {poster?.poster.summary ?? '需要时再生成，避免右侧堆满无用按钮。生成后会在这里直接预览。'}
+            </p>
+            <button
+              className="action-button action-button-primary output-card-button"
+              disabled={posterLoading}
+              onClick={poster?.poster.imageUrl ? onOpenPoster : onGeneratePoster}
+              type="button"
+            >
+              {posterLoading ? '生成中...' : poster?.poster.imageUrl ? '打开信息图海报' : '生成信息图海报'}
+            </button>
+
+            {poster?.poster.imageUrl ? (
+              <img alt={poster.poster.title} className="poster-preview" src={poster.poster.imageUrl} />
+            ) : (
+              <div className="empty-note output-card-empty">生成后会在这里显示海报预览。</div>
+            )}
+          </section>
         </>
       ) : (
         <section className="panel-block">
           <div className="panel-kicker">输出面板</div>
-          <div className="empty-note">讨论完成后，分享链接、海报和摘要会出现在这里。</div>
+          <div className="empty-note">讨论完成后，右侧只会出现分享页面和信息图海报两个出口。</div>
         </section>
       )}
     </section>
@@ -1374,21 +1351,25 @@ export default function ArenaStudio() {
     }
   }
 
-  async function handleCopyShare() {
-    if (!currentRun) {
-      return
-    }
-
-    const url = buildSuggestedShareUrl(currentLinks, currentRun.runId)
-    await navigator.clipboard.writeText(url)
-  }
-
   function handleOpenShare() {
     if (!currentRun) {
       return
     }
 
     window.open(buildSuggestedShareUrl(currentLinks, currentRun.runId), '_blank', 'noopener,noreferrer')
+  }
+
+  function handleOpenPoster() {
+    if (!currentRun) {
+      return
+    }
+
+    if (posterResponse?.poster.imageUrl) {
+      window.open(posterResponse.poster.imageUrl, '_blank', 'noopener,noreferrer')
+      return
+    }
+
+    window.open(buildInfographicPageUrl(currentRun.runId), '_blank', 'noopener,noreferrer')
   }
 
   const leftColumn = leftSidebarCollapsed ? '68px' : `${leftWidth}px`
@@ -1543,16 +1524,15 @@ export default function ArenaStudio() {
               </div>
             </div>
             <div className="sidebar-scroll">
-              <OutputPanel
-                currentRun={currentRun}
-                links={currentLinks}
-                onCopyShare={() => void handleCopyShare()}
-                onGeneratePoster={() => void handleGeneratePoster()}
-                onLoadRun={handleLoadRun}
-                onOpenShare={handleOpenShare}
-                poster={posterResponse}
-                posterLoading={posterLoading}
-              />
+            <OutputPanel
+              currentRun={currentRun}
+              links={currentLinks}
+              onGeneratePoster={() => void handleGeneratePoster()}
+              onOpenPoster={handleOpenPoster}
+              onOpenShare={handleOpenShare}
+              poster={posterResponse}
+              posterLoading={posterLoading}
+            />
             </div>
           </>
         )}
