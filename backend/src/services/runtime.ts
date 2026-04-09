@@ -113,8 +113,43 @@ function isTimeoutMessage(message: string): boolean {
   return /超时|timeout|timed out/i.test(message);
 }
 
-function shouldUseSiliconFlowForModel(model: string): boolean {
+function shouldFallbackToSiliconFlowOnTimeout(model: string): boolean {
   return /(gpt-5\.4|codex)/i.test(model);
+}
+
+function shouldUseSiliconFlowAsPrimaryModel(model: string, siliconFlowModels: string[]): boolean {
+  const normalizedModel = model.trim().toLowerCase();
+  if (!normalizedModel) {
+    return false;
+  }
+
+  if (siliconFlowModels.some((candidate) => candidate.trim().toLowerCase() === normalizedModel)) {
+    return true;
+  }
+
+  return /(kimi|minimax)/i.test(model);
+}
+
+function buildSiliconFlowModelChain(primaryModel: string, fallbackModels: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const model of [primaryModel, ...fallbackModels]) {
+    const normalized = model.trim();
+    if (!normalized) {
+      continue;
+    }
+
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    result.push(normalized);
+  }
+
+  return result;
 }
 
 function toError(value: unknown): Error {
@@ -444,14 +479,35 @@ export class ClaudeCodeRuntime {
   private async runStructured<T>(options: StructuredCallOptions<T>): Promise<{ value: T; execution: ClaudeExecutionInfo }> {
     const requestedEffort = options.reasoningEffort ?? this.config.reasoningEffort;
     const primaryEffort = mapEffortToClaude(requestedEffort);
+    let lastError: Error | null = null;
+
+    if (shouldUseSiliconFlowAsPrimaryModel(this.config.targetModel, this.config.siliconFlowFallbackModels)) {
+      try {
+        return await this.executeSiliconFlowStructured(
+          options,
+          requestedEffort,
+          buildSiliconFlowModelChain(this.config.targetModel, this.config.siliconFlowFallbackModels),
+          false,
+        );
+      } catch (error) {
+        lastError = toError(error);
+      }
+
+      try {
+        return await this.executeAttempt(options, this.config.fallbackModel, this.config.fallbackEffort, true);
+      } catch (error) {
+        lastError = toError(error);
+      }
+
+      throw lastError ?? new Error('SiliconFlow 调用失败');
+    }
+
     const attempts = this.unsupportedModels.has(this.config.targetModel)
       ? [{ model: this.config.fallbackModel, effort: this.config.fallbackEffort, fallbackUsed: true }]
       : [
           { model: this.config.targetModel, effort: primaryEffort, fallbackUsed: false },
           { model: this.config.fallbackModel, effort: this.config.fallbackEffort, fallbackUsed: true },
         ];
-
-    let lastError: Error | null = null;
 
     for (const attempt of attempts) {
       try {
@@ -461,11 +517,16 @@ export class ClaudeCodeRuntime {
 
         if (
           attempt.model === this.config.targetModel &&
-          shouldUseSiliconFlowForModel(this.config.targetModel) &&
+          shouldFallbackToSiliconFlowOnTimeout(this.config.targetModel) &&
           isTimeoutMessage(lastError.message)
         ) {
           try {
-            return await this.executeSiliconFlowFallback(options, requestedEffort);
+            return await this.executeSiliconFlowStructured(
+              options,
+              requestedEffort,
+              this.config.siliconFlowFallbackModels,
+              true,
+            );
           } catch (siliconFlowError) {
             lastError = toError(siliconFlowError);
           }
@@ -485,12 +546,14 @@ export class ClaudeCodeRuntime {
     throw lastError ?? new Error('Claude Agent SDK 调用失败');
   }
 
-  private async executeSiliconFlowFallback<T>(
+  private async executeSiliconFlowStructured<T>(
     options: StructuredCallOptions<T>,
     requestedEffort: ReasoningEffort,
+    models: string[],
+    fallbackUsed: boolean,
   ): Promise<{ value: T; execution: ClaudeExecutionInfo }> {
     if (!this.config.siliconFlowApiKey) {
-      throw new Error('SiliconFlow fallback 未配置 API key');
+      throw new Error('SiliconFlow 未配置 API key');
     }
 
     const systemPrompt = `${options.agentPrompt}\n\nAgent ID: ${options.agentName}\nRole: ${options.agentDescription}`;
@@ -505,8 +568,13 @@ export class ClaudeCodeRuntime {
     ].join('\n');
 
     let lastError: Error | null = null;
+    const modelChain = buildSiliconFlowModelChain('', models);
 
-    for (const model of this.config.siliconFlowFallbackModels) {
+    if (modelChain.length === 0) {
+      throw new Error('SiliconFlow 未配置可用模型');
+    }
+
+    for (const [index, model] of modelChain.entries()) {
       const startedAt = Date.now();
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), this.config.siliconFlowRequestTimeoutMs);
@@ -562,7 +630,7 @@ export class ClaudeCodeRuntime {
             requestedEffort,
             effectiveModel: model,
             effectiveEffort: mapEffortToClaude(requestedEffort),
-            fallbackUsed: true,
+            fallbackUsed: fallbackUsed || index > 0,
             durationMs: Date.now() - startedAt,
           },
         };
@@ -578,7 +646,7 @@ export class ClaudeCodeRuntime {
       }
     }
 
-    throw lastError ?? new Error('SiliconFlow fallback 调用失败');
+    throw lastError ?? new Error('SiliconFlow 调用失败');
   }
 
   private async executeAttempt<T>(

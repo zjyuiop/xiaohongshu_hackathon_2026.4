@@ -26,6 +26,10 @@ export interface AppConfig {
   posterApiKey?: string;
   posterRequestTimeoutMs: number;
   posterRequestRetryCount: number;
+  posterImageModel?: string;
+  posterImageBaseUrl?: string;
+  posterImageApiKey?: string;
+  posterImageTimeoutMs: number;
   siliconFlowBaseUrl: string;
   siliconFlowApiKey?: string;
   siliconFlowFallbackModels: string[];
@@ -69,6 +73,14 @@ function parseStringList(input: string | undefined, fallback: string[]): string[
   return result.length > 0 ? result : fallback;
 }
 
+function shouldMigrateLegacyTargetModel(input: string, siliconFlowApiKey: string | undefined): boolean {
+  if (!siliconFlowApiKey) {
+    return false;
+  }
+
+  return /(gpt-5\.4|codex)/i.test(input.trim());
+}
+
 export function mapEffortToClaude(effort: ReasoningEffort): ClaudeCliEffort {
   if (effort === 'xhigh') {
     return 'max';
@@ -86,6 +98,15 @@ export function getConfig(): AppConfig {
   const defaultClaudeBinary = ccsProfile
     ? path.resolve(backendRoot, 'bin/claude-via-ccs.sh')
     : path.resolve(backendRoot, 'node_modules/.bin/claude');
+  const siliconFlowApiKey = process.env.SILICONFLOW_API_KEY?.trim() || undefined;
+  const siliconFlowFallbackModels = parseStringList(process.env.SILICONFLOW_FALLBACK_MODELS, [
+    'Pro/MiniMaxAI/MiniMax-M2.5',
+    'Pro/moonshotai/Kimi-K2.5',
+  ]);
+  const requestedTargetModel = process.env.TARGET_MODEL?.trim() || 'Pro/MiniMaxAI/MiniMax-M2.5';
+  const targetModel = shouldMigrateLegacyTargetModel(requestedTargetModel, siliconFlowApiKey)
+    ? siliconFlowFallbackModels[0] ?? requestedTargetModel
+    : requestedTargetModel;
 
   return {
     port: parseNumber(process.env.PORT, 3030),
@@ -93,7 +114,7 @@ export function getConfig(): AppConfig {
     projectRoot,
     databaseUrl: process.env.DATABASE_URL ?? 'postgresql://postgres:postgres@127.0.0.1:54329/time_persona',
     agentRuntime: 'claude-agent-sdk',
-    targetModel: process.env.TARGET_MODEL ?? 'gpt-5.4',
+    targetModel,
     reasoningEffort: (process.env.REASONING_EFFORT as ReasoningEffort | undefined) ?? 'xhigh',
     fallbackModel: process.env.FALLBACK_MODEL ?? 'claude-opus-4-6',
     fallbackEffort: (process.env.FALLBACK_EFFORT as ClaudeCliEffort | undefined) ?? 'max',
@@ -113,12 +134,20 @@ export function getConfig(): AppConfig {
     posterApiKey: process.env.POSTER_LLM_API_KEY,
     posterRequestTimeoutMs: parseInteger(process.env.POSTER_LLM_TIMEOUT_MS, 20000, 2000, 120000),
     posterRequestRetryCount: parseInteger(process.env.POSTER_LLM_RETRY_COUNT, 1, 0, 3),
+    posterImageModel: process.env.POSTER_IMAGE_MODEL?.trim() || 'gemini-3-pro-image-preview',
+    posterImageBaseUrl:
+      process.env.POSTER_IMAGE_BASE_URL?.replace(/\/+$/, '') ||
+      process.env.GEMINI_BASE_URL?.replace(/\/+$/, '') ||
+      'https://generativelanguage.googleapis.com/v1beta',
+    posterImageApiKey:
+      process.env.POSTER_IMAGE_API_KEY?.trim() ||
+      process.env.GEMINI_API_KEY?.trim() ||
+      process.env.GOOGLE_API_KEY?.trim() ||
+      undefined,
+    posterImageTimeoutMs: parseInteger(process.env.POSTER_IMAGE_TIMEOUT_MS, 120000, 5000, 300000),
     siliconFlowBaseUrl: process.env.SILICONFLOW_BASE_URL?.replace(/\/+$/, '') || 'https://api.siliconflow.cn/v1',
-    siliconFlowApiKey: process.env.SILICONFLOW_API_KEY?.trim() || undefined,
-    siliconFlowFallbackModels: parseStringList(process.env.SILICONFLOW_FALLBACK_MODELS, [
-      'Pro/moonshotai/Kimi-K2.5',
-      'Pro/MiniMaxAI/MiniMax-M2.5',
-    ]),
+    siliconFlowApiKey,
+    siliconFlowFallbackModels,
     siliconFlowRequestTimeoutMs: parseInteger(process.env.SILICONFLOW_TIMEOUT_MS, 90000, 5000, 300000),
     arenaSpeakerTimeoutMs: parseInteger(process.env.ARENA_SPEAKER_TIMEOUT_MS, 90000, 10000, 300000),
     arenaSummaryTimeoutMs: parseInteger(process.env.ARENA_SUMMARY_TIMEOUT_MS, 120000, 10000, 300000),
