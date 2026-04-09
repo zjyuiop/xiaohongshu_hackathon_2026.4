@@ -1,0 +1,22 @@
+<svg width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="graduate_bg" x1="30" y1="18" x2="132" y2="142" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E5F7F2"/>
+      <stop offset="1" stop-color="#B9E2D8"/>
+    </linearGradient>
+    <linearGradient id="graduate_blazer" x1="80" y1="96" x2="80" y2="146" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6F7FD1"/>
+      <stop offset="1" stop-color="#4959A9"/>
+    </linearGradient>
+  </defs>
+  <circle cx="80" cy="80" r="72" fill="url(#graduate_bg)"/>
+  <path d="M40 145C46 116 60 100 80 100C100 100 114 116 120 145H40Z" fill="url(#graduate_blazer)"/>
+  <path d="M60 111C66 103 73 99 80 99C87 99 94 103 100 111L80 138L60 111Z" fill="#F8F9FF"/>
+  <circle cx="80" cy="72" r="30" fill="#F7CCB1"/>
+  <path d="M48 74C48 48 61 35 80 35C99 35 112 49 112 74V84C107 77 100 73 92 73C79 73 74 80 63 80C57 80 52 78 48 74Z" fill="#3E455A"/>
+  <path d="M55 88C57 103 66 114 80 114C94 114 103 103 105 88" fill="#F7CCB1"/>
+  <path d="M68 77H74" stroke="#5A3B30" stroke-width="3" stroke-linecap="round"/>
+  <path d="M86 77H92" stroke="#5A3B30" stroke-width="3" stroke-linecap="round"/>
+  <path d="M74 90C77 92 83 92 86 90" stroke="#B97A61" stroke-width="2.4" stroke-linecap="round"/>
+  <circle cx="112" cy="48" r="10" fill="#FFFFFF" fill-opacity="0.18"/>
+</svg>

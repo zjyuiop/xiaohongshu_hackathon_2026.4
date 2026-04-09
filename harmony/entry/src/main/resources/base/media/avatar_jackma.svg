@@ -1,0 +1,21 @@
+<svg width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="jackma_bg" x1="28" y1="18" x2="128" y2="142" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E5F9F7"/>
+      <stop offset="1" stop-color="#79D3C6"/>
+    </linearGradient>
+    <linearGradient id="jackma_suit" x1="80" y1="96" x2="80" y2="146" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#314560"/>
+      <stop offset="1" stop-color="#1F3047"/>
+    </linearGradient>
+  </defs>
+  <circle cx="80" cy="80" r="72" fill="url(#jackma_bg)"/>
+  <path d="M38 145C45 118 59 100 80 100C101 100 115 118 122 145H38Z" fill="url(#jackma_suit)"/>
+  <circle cx="80" cy="72" r="28" fill="#EFC1A3"/>
+  <path d="M56 66C58 49 67 39 80 39C93 39 102 48 104 66C97 59 89 56 80 56C71 56 63 58 56 66Z" fill="#2D313C"/>
+  <path d="M68 77H74" stroke="#54392E" stroke-width="3" stroke-linecap="round"/>
+  <path d="M86 77H92" stroke="#54392E" stroke-width="3" stroke-linecap="round"/>
+  <path d="M72 90C76 95 84 95 88 90" stroke="#9E654E" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M69 101L80 93L91 101" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round"/>
+  <circle cx="112" cy="46" r="9" fill="#FFFFFF" fill-opacity="0.18"/>
+</svg>

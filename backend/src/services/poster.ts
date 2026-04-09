@@ -34,6 +34,7 @@ const TRANSCRIPT_EXCERPT_COUNT = 24;
 const TRANSCRIPT_LINE_MAX_CHARS = 260;
 const POSTER_COPY_DEADLINE_MS = 6000;
 const POSTER_CACHE_MANIFEST_FILE = 'poster-manifest.json';
+const POSTER_CACHE_VERSION = 'gemini-direct-v4';
 
 const SANS_FONT_FAMILY = `'Noto Sans SC','PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif`;
 const MONO_FONT_FAMILY = `'JetBrains Mono','SFMono-Regular',Menlo,monospace`;
@@ -57,6 +58,7 @@ interface PosterChip {
 }
 
 interface PosterCacheManifest {
+  pipeline: string;
   runId: string;
   title: string;
   summary: string;
@@ -66,6 +68,18 @@ interface PosterCacheManifest {
   imageFileName: string;
   promptFileName?: string;
   sourceFileName?: string;
+}
+
+interface GeminiImagePart {
+  text?: string;
+  inlineData?: {
+    mimeType?: string;
+    data?: string;
+  };
+  inline_data?: {
+    mime_type?: string;
+    data?: string;
+  };
 }
 
 function sleep(ms: number): Promise<void> {
@@ -216,7 +230,13 @@ function toCacheToken(value: string): string {
 }
 
 function getSkillPosterCacheDir(runId: string, stylePreset: PosterStylePreset, aspectRatio: PosterAspectRatio): string {
-  return path.join(config.generatedDir, 'arena-posters-cache', slugify(runId), `${stylePreset}-${toCacheToken(aspectRatio)}`);
+  return path.join(
+    config.generatedDir,
+    'arena-posters-cache',
+    slugify(runId),
+    POSTER_CACHE_VERSION,
+    `${stylePreset}-${toCacheToken(aspectRatio)}`,
+  );
 }
 
 function createWorkspaceSlug(run: ArenaRun): string {
@@ -316,6 +336,70 @@ function buildPosterAsset(input: {
     sourceUrl: toAbsoluteAssetUrl(input.absoluteBaseUrl, toPublicAssetPath(input.sourcePath)),
     generatedAt: input.generatedAt,
   };
+}
+
+function inferImageExtension(mimeType: string | undefined): '.png' | '.jpg' | '.webp' {
+  if (mimeType === 'image/jpeg') {
+    return '.jpg';
+  }
+
+  if (mimeType === 'image/webp') {
+    return '.webp';
+  }
+
+  return '.png';
+}
+
+function resolvePosterImageGenerateUrl(): string | undefined {
+  if (!config.posterImageApiKey || !config.posterImageModel || !config.posterImageBaseUrl) {
+    return undefined;
+  }
+
+  const normalizedBase = config.posterImageBaseUrl.replace(/\/+$/, '');
+  if (normalizedBase.endsWith('/v1beta')) {
+    return `${normalizedBase}/models/${config.posterImageModel}:generateContent`;
+  }
+
+  if (normalizedBase.endsWith('/gemini')) {
+    return `${normalizedBase}/v1beta/models/${config.posterImageModel}:generateContent`;
+  }
+
+  return `${normalizedBase}/models/${config.posterImageModel}:generateContent`;
+}
+
+function extractGeminiImageCandidate(payload: unknown): { imageBytes: Buffer; mimeType: string; text?: string } {
+  const candidates =
+    typeof payload === 'object' && payload !== null && 'candidates' in payload
+      ? (payload as { candidates?: Array<{ content?: { parts?: GeminiImagePart[] } }> }).candidates
+      : undefined;
+
+  for (const candidate of candidates ?? []) {
+    const parts = candidate.content?.parts ?? [];
+    const textParts: string[] = [];
+
+    for (const part of parts) {
+      if (part.text) {
+        textParts.push(part.text);
+      }
+
+      const inlineData = part.inlineData ?? part.inline_data;
+      if (inlineData?.data) {
+        const mimeType =
+          'mimeType' in inlineData
+            ? inlineData.mimeType
+            : 'mime_type' in inlineData
+              ? inlineData.mime_type
+              : undefined;
+        return {
+          imageBytes: Buffer.from(inlineData.data, 'base64'),
+          mimeType: mimeType ?? 'image/png',
+          text: textParts.join('\n').trim() || undefined,
+        };
+      }
+    }
+  }
+
+  throw new Error(`海报图片模型没有返回图像数据: ${JSON.stringify(payload).slice(0, 800)}`);
 }
 
 async function pickGeneratedSkillFile(
@@ -491,6 +575,7 @@ async function loadCachedSkillPosterAsset(input: {
   }
 
   if (
+    manifest.pipeline !== POSTER_CACHE_VERSION ||
     manifest.runId !== input.run.runId ||
     manifest.stylePreset !== input.stylePreset ||
     manifest.aspectRatio !== input.aspectRatio
@@ -555,6 +640,7 @@ async function persistSkillPosterAsset(input: {
   }
 
   const manifest: PosterCacheManifest = {
+    pipeline: POSTER_CACHE_VERSION,
     runId: input.run.runId,
     title: input.poster.title,
     summary: input.poster.summary,
@@ -889,6 +975,7 @@ function renderEditorialFallbackHtml(
   copy: PosterCopyPlan,
   stylePreset: PosterStylePreset,
   aspectRatio: PosterAspectRatio,
+  backgroundDataUrl?: string,
 ): string {
   const { width, height } = getCaptureDimensions(aspectRatio);
   const portrait = height > width;
@@ -925,27 +1012,17 @@ function renderEditorialFallbackHtml(
           };
 
   const actions = run.summary.actionableAdvice.slice(0, 3);
-  const disagreements = run.summary.disagreements.slice(0, 3);
-  const cast = run.participants.slice(0, portrait ? 6 : 4);
-  const snippets = run.messages.slice(-4);
+  const disagreements = run.summary.disagreements.slice(0, 2);
+  const snippets = run.messages.filter((item) => item.kind !== 'user').slice(-2);
   const headline = escapeHtml(copy.title);
   const deck = escapeHtml(copy.subtitle || run.summary.consensus || run.summary.narrativeHook);
-  const topic = escapeHtml(truncateText(run.topic, portrait ? 52 : 76));
-  const consensus = escapeHtml(run.summary.consensus);
-  const summaryBullets = copy.bullets.slice(0, 3).map((item) => `<li>${escapeHtml(item)}</li>`).join('');
+  const topic = escapeHtml(truncateText(run.topic, portrait ? 42 : 72));
+  const consensus = escapeHtml(run.summary.consensus || run.summary.narrativeHook || run.topic);
   const actionItems = actions.map((item) => `<li>${escapeHtml(item)}</li>`).join('');
-  const disagreementItems = disagreements.length > 0
+  const summaryBullets = copy.bullets.slice(0, 3).map((item) => `<li>${escapeHtml(item)}</li>`).join('');
+  const signalItems = disagreements.length > 0
     ? disagreements.map((item) => `<li>${escapeHtml(item)}</li>`).join('')
-    : '<li>当前没有新的明显分歧，重点在执行与取舍。</li>';
-  const castItems = cast
-    .map(
-      (item) => `
-        <li class="cast-item">
-          <strong>${escapeHtml(item.displayName)}</strong>
-          <span>${escapeHtml(item.stageLabel)}</span>
-        </li>`,
-    )
-    .join('');
+    : summaryBullets;
   const snippetItems = snippets
     .map(
       (item) => `
@@ -990,16 +1067,26 @@ function renderEditorialFallbackHtml(
         padding: ${portrait ? 54 : 48}px;
         display: grid;
         grid-template-rows: auto auto 1fr;
-        gap: ${portrait ? 30 : 24}px;
+        gap: ${portrait ? 24 : 24}px;
         background:
-          radial-gradient(circle at top right, rgba(0,0,0,0.04), transparent 24%),
-          linear-gradient(180deg, rgba(255,255,255,0.24), transparent 22%),
+          linear-gradient(180deg, rgba(0,0,0,0.12), rgba(0,0,0,0.04)),
           var(--paper);
         overflow: hidden;
         position: relative;
       }
 
       .card::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          linear-gradient(180deg, rgba(9,12,18,0.10), rgba(9,12,18,0.48)),
+          ${backgroundDataUrl ? `url("${backgroundDataUrl}") center/cover no-repeat,` : ''}
+          radial-gradient(circle at top right, rgba(255,255,255,0.08), transparent 28%);
+        opacity: ${backgroundDataUrl ? '0.98' : '1'};
+      }
+
+      .card::after {
         content: "";
         position: absolute;
         inset: 0;
@@ -1041,32 +1128,37 @@ function renderEditorialFallbackHtml(
       .headline {
         margin: 0;
         font-family: "Noto Serif SC", serif;
-        font-size: ${portrait ? 98 : square ? 88 : 76}px;
+        font-size: ${portrait ? 84 : square ? 88 : 76}px;
         line-height: 0.94;
         letter-spacing: -0.05em;
+        max-width: ${portrait ? '92%' : '100%'};
       }
 
       .deck {
-        margin: 18px 0 0;
-        font-size: ${portrait ? 28 : 24}px;
+        margin: 14px 0 0;
+        font-size: ${portrait ? 24 : 24}px;
         line-height: 1.55;
         color: var(--muted);
+        max-width: ${portrait ? '94%' : '100%'};
       }
 
       .topic-line {
-        margin: 22px 0 0;
-        padding-top: 18px;
-        border-top: 5px solid var(--accent);
-        font-size: ${portrait ? 22 : 20}px;
+        margin: 18px 0 0;
+        padding-top: 14px;
+        border-top: 4px solid var(--accent);
+        font-size: ${portrait ? 19 : 20}px;
         line-height: 1.6;
+        max-width: ${portrait ? '95%' : '100%'};
       }
 
       .hero-side {
         padding: 26px 28px;
-        background: var(--panel-strong);
+        background: rgba(8, 11, 17, 0.42);
+        backdrop-filter: blur(8px);
         border: 1px solid var(--line);
         display: grid;
         gap: 16px;
+        border-radius: 26px;
       }
 
       .hero-side h2,
@@ -1087,7 +1179,7 @@ function renderEditorialFallbackHtml(
       .content {
         display: grid;
         grid-template-columns: ${portrait ? '1fr' : 'minmax(0, 1.02fr) minmax(320px, 0.98fr)'};
-        gap: ${portrait ? 20 : 24}px;
+        gap: ${portrait ? 16 : 24}px;
         min-height: 0;
         position: relative;
         z-index: 1;
@@ -1100,9 +1192,11 @@ function renderEditorialFallbackHtml(
       }
 
       .section {
-        padding: 24px 26px;
-        background: var(--panel);
+        padding: ${portrait ? '20px 22px' : '24px 26px'};
+        background: rgba(8, 11, 17, 0.34);
+        backdrop-filter: blur(10px);
         border: 1px solid var(--line);
+        border-radius: 26px;
       }
 
       .section ul {
@@ -1110,34 +1204,8 @@ function renderEditorialFallbackHtml(
         padding-left: 22px;
         display: grid;
         gap: 12px;
-        font-size: ${portrait ? 24 : 22}px;
+        font-size: ${portrait ? 21 : 22}px;
         line-height: 1.56;
-      }
-
-      .cast-list {
-        list-style: none;
-        padding: 0;
-        margin: 14px 0 0;
-        display: grid;
-        gap: 12px;
-      }
-
-      .cast-item {
-        display: flex;
-        justify-content: space-between;
-        gap: 16px;
-        padding: 14px 0;
-        border-top: 1px solid var(--line);
-      }
-
-      .cast-item strong {
-        font-size: 22px;
-      }
-
-      .cast-item span {
-        font-size: 19px;
-        color: var(--muted);
-        text-align: right;
       }
 
       .quotes {
@@ -1147,9 +1215,10 @@ function renderEditorialFallbackHtml(
       }
 
       .quote-item {
-        padding: 16px 18px;
-        background: rgba(255,255,255,0.35);
+        padding: ${portrait ? '14px 16px' : '16px 18px'};
+        background: rgba(255,255,255,0.12);
         border-left: 4px solid var(--accent);
+        border-radius: 18px;
       }
 
       .quote-meta {
@@ -1162,35 +1231,20 @@ function renderEditorialFallbackHtml(
 
       .quote-body {
         margin: 0;
-        font-size: ${portrait ? 21 : 19}px;
+        font-size: ${portrait ? 18 : 19}px;
         line-height: 1.6;
-      }
-
-      .footer {
-        display: flex;
-        justify-content: space-between;
-        gap: 20px;
-        align-items: end;
-        border-top: 1px solid var(--line);
-        padding-top: 14px;
-        position: relative;
-        z-index: 1;
-      }
-
-      .footer-note {
-        margin: 0;
-        font-size: 16px;
-        line-height: 1.5;
-        color: var(--muted);
       }
 
       .footer-run {
         margin: 0;
         font-family: "Oswald", "Inter", sans-serif;
-        font-size: 18px;
+        font-size: 14px;
         letter-spacing: 0.12em;
         text-transform: uppercase;
         color: var(--muted);
+        position: relative;
+        z-index: 1;
+        align-self: end;
       }
 
       @media (max-width: 900px) {
@@ -1236,31 +1290,20 @@ function renderEditorialFallbackHtml(
               <ul>${actionItems || summaryBullets}</ul>
             </section>
             <section class="section">
-              <h3>Why This Matters</h3>
-              <ul>${summaryBullets}</ul>
+              <h3>Signal To Watch</h3>
+              <ul>${signalItems}</ul>
             </section>
           </div>
 
           <div class="column">
             <section class="section">
-              <h3>Who Spoke</h3>
-              <ul class="cast-list">${castItems}</ul>
-            </section>
-            <section class="section">
-              <h3>Tension</h3>
-              <ul>${disagreementItems}</ul>
-            </section>
-            <section class="section">
-              <h3>Key Quotes</h3>
+              <h3>Key Voices</h3>
               <div class="quotes">${snippetItems}</div>
             </section>
           </div>
         </section>
 
-        <footer class="footer">
-          <p class="footer-note">${escapeHtml(copy.visualPrompt)}</p>
-          <p class="footer-run">${escapeHtml(run.runId)}</p>
-        </footer>
+        <p class="footer-run">${escapeHtml(run.runId)}</p>
       </article>
     </main>
   </body>
@@ -1309,6 +1352,40 @@ async function generateEditorialFallbackPosterAsset(input: {
     imagePath,
     promptPath: input.promptPath,
     sourcePath: htmlPath,
+    generatedAt: new Date().toISOString(),
+    absoluteBaseUrl: input.absoluteBaseUrl,
+  });
+}
+
+async function generateGeminiCompositePosterAsset(input: {
+  run: ArenaRun;
+  copy: PosterCopyPlan;
+  stylePreset: PosterStylePreset;
+  aspectRatio: PosterAspectRatio;
+  workspaceDir: string;
+  promptPath: string;
+  absoluteBaseUrl?: string;
+}): Promise<ArenaPosterAsset | undefined> {
+  const generatedImage = await requestPosterBackgroundImage({
+    run: input.run,
+    copy: input.copy,
+    stylePreset: input.stylePreset,
+    aspectRatio: input.aspectRatio,
+    workspaceDir: input.workspaceDir,
+  });
+
+  const deliverablesDir = path.join(input.workspaceDir, INFOCARD_OUTPUT_DIR);
+
+  return buildPosterAsset({
+    runId: input.run.runId,
+    title: input.copy.title,
+    summary: input.copy.subtitle,
+    stylePreset: input.stylePreset,
+    aspectRatio: input.aspectRatio,
+    outputDir: deliverablesDir,
+    imagePath: generatedImage.imagePath,
+    promptPath: generatedImage.promptPath || input.promptPath,
+    sourcePath: generatedImage.responsePath,
     generatedAt: new Date().toISOString(),
     absoluteBaseUrl: input.absoluteBaseUrl,
   });
@@ -1524,6 +1601,162 @@ function buildFallbackPosterCopy(run: ArenaRun): PosterCopyPlan {
     bullets: buildFallbackBullets(run),
     visualPrompt: truncateText(`围绕“${run.topic}”的跨时空人格讨论海报，突出冲突、判断、成长与决断感。`, VISUAL_PROMPT_MAX_CHARS),
   };
+}
+
+function resolveGeminiAspectRatio(aspectRatio: PosterAspectRatio): '1:1' | '3:4' | '4:3' | '9:16' | '16:9' {
+  if (aspectRatio === '2.35:1') {
+    return '16:9';
+  }
+
+  if (aspectRatio === '3:2') {
+    return '4:3';
+  }
+
+  return aspectRatio;
+}
+
+function buildPosterImagePrompt(
+  run: ArenaRun,
+  copy: PosterCopyPlan,
+  stylePreset: PosterStylePreset,
+  aspectRatio: PosterAspectRatio,
+): string {
+  const styleDirection =
+    stylePreset === 'cinematic'
+      ? 'premium editorial infographic, cinematic contrast, sharp hierarchy, dense structured layout'
+      : stylePreset === 'poster'
+        ? 'modern information design poster, bold hierarchy, modular cards, restrained palette'
+        : 'editorial reportage infographic, warm paper tones, refined structured storytelling';
+
+  const actionLine = copy.bullets.slice(0, 3).join(' / ');
+  const voices = run.participants
+    .slice(0, 3)
+    .map((item) => `${item.displayName} (${item.stageLabel})`)
+    .join(', ');
+  const disagreementLine = run.summary.disagreements.slice(0, 2).join(' / ');
+  const actionItems = run.summary.actionableAdvice
+    .slice(0, 3)
+    .map((item, index) => `${index + 1}. ${item}`)
+    .join(' | ');
+  const keyQuotes = run.messages
+    .filter((item) => item.kind !== 'user')
+    .slice(-3)
+    .map((item) => `${item.displayName}: ${truncateText(item.content, 48)}`)
+    .join(' | ');
+
+  return [
+    'Create a finished Chinese infographic poster based on a multi-persona discussion.',
+    'This must be a content-dense infographic, not a hero image and not a mood board.',
+    'Use simplified Chinese with large readable short phrases, strong information hierarchy, modular panels, callout cards, arrows, dividers, charts, icons, and section labels.',
+    'The layout should feel like a premium social-media infographic: rich with information, visually packed, immediately scannable, and polished.',
+    'Do not create a single cinematic scene. Do not leave large empty negative space. Avoid pure illustration-only output.',
+    'No watermark, no logo, no app UI screenshot.',
+    `Aspect ratio: ${resolveGeminiAspectRatio(aspectRatio)}.`,
+    `Art direction: ${styleDirection}.`,
+    `Topic: ${run.topic}.`,
+    `Core judgment: ${run.summary.consensus || run.summary.narrativeHook}.`,
+    `Main title to visualize: ${copy.title}.`,
+    `Subtitle or thesis line: ${copy.subtitle}.`,
+    actionLine ? `Key summary bullets: ${actionLine}.` : '',
+    actionItems ? `Action items section: ${actionItems}.` : '',
+    disagreementLine ? `Main disagreement section: ${disagreementLine}.` : '',
+    voices ? `Participant section should show 2-3 personas with labels: ${voices}.` : '',
+    keyQuotes ? `Quote or voice snippets to visualize in short callouts: ${keyQuotes}.` : '',
+    'Recommended composition: top headline block, middle thesis and comparison grid, side labels for personas, lower action checklist, and a final takeaway strip.',
+    'Make each section visually distinct and filled with content. Use bold labels, short captions, badges, numbered steps, and compact data-viz shapes.',
+    'Keep all typography large, short, and legible. Prefer short Chinese phrases over long sentences. Avoid tiny paragraphs.',
+    'Visually complete on its own as the final deliverable.',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+async function requestPosterBackgroundImage(input: {
+  run: ArenaRun;
+  copy: PosterCopyPlan;
+  stylePreset: PosterStylePreset;
+  aspectRatio: PosterAspectRatio;
+  workspaceDir: string;
+}): Promise<{
+  imagePath: string;
+  promptPath: string;
+  responsePath: string;
+  textPath?: string;
+}> {
+  const generateUrl = resolvePosterImageGenerateUrl();
+  if (!generateUrl || !config.posterImageApiKey) {
+    throw new Error('海报图片模型未配置');
+  }
+
+  const deliverablesDir = path.join(input.workspaceDir, INFOCARD_OUTPUT_DIR);
+  await ensureDir(deliverablesDir);
+
+  const promptPath = path.join(deliverablesDir, 'nanobanana-image-prompt.txt');
+  const responsePath = path.join(deliverablesDir, 'nanobanana-image.response.json');
+  const baseOutputPath = path.join(deliverablesDir, 'nanobanana-background');
+  const prompt = buildPosterImagePrompt(input.run, input.copy, input.stylePreset, input.aspectRatio);
+  await fs.writeFile(promptPath, prompt, 'utf8');
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), config.posterImageTimeoutMs);
+
+  try {
+    const response = await fetch(generateUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': config.posterImageApiKey,
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [{ text: prompt }],
+          },
+        ],
+        generationConfig: {
+          responseModalities: ['TEXT', 'IMAGE'],
+          imageConfig: {
+            aspectRatio: resolveGeminiAspectRatio(input.aspectRatio),
+            imageSize: '2K',
+          },
+        },
+      }),
+      signal: controller.signal,
+    });
+
+    const rawBody = await response.text();
+    if (!response.ok) {
+      throw new Error(`海报图片模型请求失败: ${response.status}${rawBody ? ` - ${rawBody.slice(0, 240)}` : ''}`);
+    }
+
+    const parsedBody = JSON.parse(rawBody) as unknown;
+    await fs.writeFile(responsePath, JSON.stringify(parsedBody, null, 2), 'utf8');
+
+    const result = extractGeminiImageCandidate(parsedBody);
+    const imagePath = `${baseOutputPath}${inferImageExtension(result.mimeType)}`;
+    await fs.writeFile(imagePath, result.imageBytes);
+
+    let textPath: string | undefined;
+    if (result.text) {
+      textPath = `${baseOutputPath}.txt`;
+      await fs.writeFile(textPath, result.text, 'utf8');
+    }
+
+    return {
+      imagePath,
+      promptPath,
+      responsePath,
+      textPath,
+    };
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`海报图片模型请求超时（${config.posterImageTimeoutMs}ms）`);
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 async function requestPosterCopyFromLlm(
@@ -1852,26 +2085,6 @@ export async function generateArenaPoster(
     };
   }
 
-  try {
-    const poster = await generateArenaPosterWithSkill(run, stylePreset, aspectRatio, language, absoluteBaseUrl);
-    const cachedPoster = await persistSkillPosterAsset({
-      run,
-      poster,
-      absoluteBaseUrl,
-    });
-    return {
-      runId: run.runId,
-      links: {
-        ...links,
-        shareApiUrl: absoluteBaseUrl ? `${absoluteBaseUrl}${links.shareApiPath}` : undefined,
-        suggestedShareUrl: absoluteBaseUrl ? `${absoluteBaseUrl}${links.suggestedSharePath}` : undefined,
-      },
-      poster: cachedPoster,
-    };
-  } catch (error) {
-    console.warn('poster skill fallback:', error);
-  }
-
   const { workspaceDir, sourceFilePath, promptFilePath, copyFilePath } = await preparePosterWorkspace(run);
 
   const promptPayload = buildPosterPrompt(run, stylePreset, aspectRatio, language);
@@ -1893,6 +2106,58 @@ export async function generateArenaPoster(
   }
   copy = sanitizePosterCopy(copy, fallbackCopy);
   await fs.writeFile(copyFilePath, JSON.stringify(copy, null, 2), 'utf8');
+
+  if (config.posterImageApiKey) {
+    try {
+      const poster = await generateGeminiCompositePosterAsset({
+        run,
+        copy,
+        stylePreset,
+        aspectRatio,
+        workspaceDir,
+        promptPath: copyFilePath,
+        absoluteBaseUrl,
+      });
+      if (poster) {
+        const cachedPoster = await persistSkillPosterAsset({
+          run,
+          poster,
+          absoluteBaseUrl,
+        });
+        return {
+          runId: run.runId,
+          links: {
+            ...links,
+            shareApiUrl: absoluteBaseUrl ? `${absoluteBaseUrl}${links.shareApiPath}` : undefined,
+            suggestedShareUrl: absoluteBaseUrl ? `${absoluteBaseUrl}${links.suggestedSharePath}` : undefined,
+          },
+          poster: cachedPoster,
+        };
+      }
+    } catch (error) {
+      console.warn('poster gemini-image fallback:', error);
+    }
+  }
+
+  try {
+    const poster = await generateArenaPosterWithSkill(run, stylePreset, aspectRatio, language, absoluteBaseUrl);
+    const cachedPoster = await persistSkillPosterAsset({
+      run,
+      poster,
+      absoluteBaseUrl,
+    });
+    return {
+      runId: run.runId,
+      links: {
+        ...links,
+        shareApiUrl: absoluteBaseUrl ? `${absoluteBaseUrl}${links.shareApiPath}` : undefined,
+        suggestedShareUrl: absoluteBaseUrl ? `${absoluteBaseUrl}${links.suggestedSharePath}` : undefined,
+      },
+      poster: cachedPoster,
+    };
+  } catch (error) {
+    console.warn('poster skill fallback:', error);
+  }
 
   const editorialFallbackPoster = await generateEditorialFallbackPosterAsset({
     run,

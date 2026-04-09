@@ -1,0 +1,22 @@
+<svg width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="jobs_bg" x1="32" y1="24" x2="124" y2="138" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E7EEFF"/>
+      <stop offset="1" stop-color="#B6C5F8"/>
+    </linearGradient>
+    <linearGradient id="jobs_shirt" x1="80" y1="92" x2="80" y2="148" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#202430"/>
+      <stop offset="1" stop-color="#0F172A"/>
+    </linearGradient>
+  </defs>
+  <circle cx="80" cy="80" r="72" fill="url(#jobs_bg)"/>
+  <circle cx="80" cy="72" r="31" fill="#F5C7A8"/>
+  <path d="M46 68C50 45 63 31 80 31C98 31 110 47 114 70C107 61 95 56 80 56C65 56 54 60 46 68Z" fill="#202430"/>
+  <path d="M43 144C49 115 62 98 80 98C98 98 111 115 117 144H43Z" fill="url(#jobs_shirt)"/>
+  <path d="M67 102C71 110 75 114 80 114C85 114 89 110 93 102L80 92L67 102Z" fill="#EAB08D"/>
+  <path d="M68 94C72 97 76 98 80 98C84 98 88 97 92 94" stroke="#7A4E39" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M67 77H74" stroke="#3B2A23" stroke-width="3" stroke-linecap="round"/>
+  <path d="M86 77H93" stroke="#3B2A23" stroke-width="3" stroke-linecap="round"/>
+  <path d="M75 88C78 90 82 90 85 88" stroke="#A26A54" stroke-width="2.4" stroke-linecap="round"/>
+  <circle cx="55" cy="42" r="12" fill="#FFFFFF" fill-opacity="0.18"/>
+</svg>

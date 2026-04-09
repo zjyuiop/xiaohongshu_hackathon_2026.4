@@ -9,6 +9,7 @@ export type ClaudeCliEffort = 'low' | 'medium' | 'high' | 'max';
 export type PosterAspectRatio = '16:9' | '2.35:1' | '4:3' | '3:2' | '1:1' | '3:4';
 export type PosterStylePreset = 'poster' | 'editorial' | 'cinematic';
 export type ArenaRunStatus = 'completed' | 'interrupted';
+export type ProfileImportType = 'manual' | 'wechat' | 'chat';
 
 export interface SourceEvidence {
   quote: string;
@@ -167,6 +168,29 @@ export interface BuildAgentsResponse {
   agents: PersonaSpec[];
 }
 
+export interface ProfileImportRequest {
+  importType: ProfileImportType;
+  profileId?: string;
+  displayNameHint?: string;
+  title?: string;
+}
+
+export interface ProfileImportSourceSummary {
+  importType: ProfileImportType;
+  sourceLabel: string;
+  title: string;
+  originalFileName: string;
+  mimeType: string;
+  extension: string;
+  charCount: number;
+  messageCount?: number;
+}
+
+export interface ProfileImportResponse {
+  bundle: ProfileBundle;
+  import: ProfileImportSourceSummary;
+}
+
 export interface MergeAgentsRequest {
   primary: PersonaSpec;
   secondary: PersonaSpec;
@@ -197,6 +221,12 @@ export interface MergeAgentsResponse {
   execution?: ClaudeExecutionInfo;
 }
 
+export interface ArenaPendingUserMessage {
+  id?: string;
+  content: string;
+  createdAt?: string;
+}
+
 export interface ArenaRunRequest {
   topic: string;
   mode: ArenaMode;
@@ -206,6 +236,7 @@ export interface ArenaRunRequest {
   roundCount?: number;
   maxMessageChars?: number;
   guidance?: string;
+  pendingUserMessages?: ArenaPendingUserMessage[];
   continueFromRunId?: string;
   sessionId?: string;
 }
@@ -213,6 +244,18 @@ export interface ArenaRunRequest {
 export interface ArenaRunResponse {
   result: ArenaRun;
   links?: ArenaOutputLinks;
+}
+
+export interface ArenaSessionMessageRequest {
+  content: string;
+  clientMessageId?: string;
+  createdAt?: string;
+}
+
+export interface ArenaSessionMessageResponse {
+  ok: true;
+  sessionId: string;
+  queuedMessages: number;
 }
 
 export interface ArenaPosterRequest {

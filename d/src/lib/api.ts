@@ -8,6 +8,8 @@ import type {
   ArenaPosterResponse,
   ArenaRun,
   ArenaRunHistoryItem,
+  ArenaSessionMessageRequestPayload,
+  ArenaSessionMessageResponse,
   ArenaRunRequestPayload,
   ArenaRunResponseEnvelope,
   ArenaStreamEvent,
@@ -251,6 +253,19 @@ export async function loadArenaHistory(limit = 20): Promise<ArenaRunHistoryItem[
 export async function interruptArenaSession(sessionId: string): Promise<void> {
   await fetchJson<{ ok: boolean; sessionId: string }>(`/api/arena/sessions/${encodeURIComponent(sessionId)}/interrupt`, {
     method: 'POST',
+  })
+}
+
+export async function sendArenaSessionMessage(
+  sessionId: string,
+  input: ArenaSessionMessageRequestPayload,
+): Promise<ArenaSessionMessageResponse> {
+  return fetchJson<ArenaSessionMessageResponse>(`/api/arena/sessions/${encodeURIComponent(sessionId)}/messages`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(input),
   })
 }
 

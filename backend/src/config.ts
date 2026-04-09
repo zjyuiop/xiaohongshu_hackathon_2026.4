@@ -34,6 +34,9 @@ export interface AppConfig {
   siliconFlowApiKey?: string;
   siliconFlowFallbackModels: string[];
   siliconFlowRequestTimeoutMs: number;
+  profileImportUploadDir: string;
+  profileImportMaxFileSizeBytes: number;
+  profileImportMaxSourceChars: number;
   arenaSpeakerTimeoutMs: number;
   arenaSummaryTimeoutMs: number;
   arenaRunTimeoutMs: number;
@@ -149,6 +152,9 @@ export function getConfig(): AppConfig {
     siliconFlowApiKey,
     siliconFlowFallbackModels,
     siliconFlowRequestTimeoutMs: parseInteger(process.env.SILICONFLOW_TIMEOUT_MS, 90000, 5000, 300000),
+    profileImportUploadDir: process.env.PROFILE_IMPORT_UPLOAD_DIR ?? path.resolve(backendRoot, 'generated', 'uploaded-imports'),
+    profileImportMaxFileSizeBytes: parseInteger(process.env.PROFILE_IMPORT_MAX_FILE_SIZE_MB, 15, 1, 100) * 1024 * 1024,
+    profileImportMaxSourceChars: parseInteger(process.env.PROFILE_IMPORT_MAX_SOURCE_CHARS, 40000, 2000, 200000),
     arenaSpeakerTimeoutMs: parseInteger(process.env.ARENA_SPEAKER_TIMEOUT_MS, 90000, 10000, 300000),
     arenaSummaryTimeoutMs: parseInteger(process.env.ARENA_SUMMARY_TIMEOUT_MS, 120000, 10000, 300000),
     arenaRunTimeoutMs: parseInteger(process.env.ARENA_RUN_TIMEOUT_MS, 480000, 60000, 1800000),

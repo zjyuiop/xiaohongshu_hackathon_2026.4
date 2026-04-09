@@ -62,7 +62,7 @@ Content-Type: application/json
 - 默认人物链路：`GET /api/presets` -> `GET /api/profiles/:profileId`
 - 自定义人物链路：`POST /api/timeline/parse` -> `POST /api/agents/build`
 - `arena` 请求必须传完整 `agents[]`，不支持只传 `agentId[]`
-- `selectedAgentIds` 只决定本次实际参会人格，范围是 2 到 3 个
+- `selectedAgentIds` 只决定本次实际参会人格，要求至少 2 个，不设上限
 - 分享/回放链路：`GET /api/arena/runs/:runId`
 - 海报/信息图链路：`POST /api/arena/poster`
 - 生成出来的 PNG / HTML / Markdown 资源，通常可通过返回的 `imageUrl` / `sourceUrl` / `promptUrl` 直接访问
@@ -70,10 +70,11 @@ Content-Type: application/json
 ### 1.5 多模型回退与超时策略
 
 - 主运行时仍通过 Claude Code SDK 发起结构化调用
-- 当主模型是 `gpt-5.4` 或 `codex` 系列，并且出现超时错误时，后端会自动切到 SiliconFlow Chat Completions
-- 当前默认 SiliconFlow 回退顺序：
-  - `Pro/moonshotai/Kimi-K2.5`
+- 默认 `TARGET_MODEL` 为 `Pro/MiniMaxAI/MiniMax-M2.5`，会直接通过 SiliconFlow Chat Completions 作为主路径
+- 当 `TARGET_MODEL` 配成 `gpt-5.4` 或 `codex` 系列，并且出现超时错误时，后端会自动切到 SiliconFlow Chat Completions
+- 当前默认 SiliconFlow 模型顺序：
   - `Pro/MiniMaxAI/MiniMax-M2.5`
+  - `Pro/moonshotai/Kimi-K2.5`
 - arena 相关超时现已拆分为三层：
   - `ARENA_SPEAKER_TIMEOUT_MS`
   - `ARENA_SUMMARY_TIMEOUT_MS`
@@ -93,6 +94,7 @@ Content-Type: application/json
 | `POST` | `/api/arena/stream` | 以 SSE 返回 arena 过程 |
 | `GET` | `/api/arena/history` | 获取最近讨论历史 |
 | `GET` | `/api/arena/runs/:runId` | 获取已保存的 arena 结果 |
+| `POST` | `/api/arena/sessions/:sessionId/messages` | 向运行中的会话实时插入用户消息 |
 | `POST` | `/api/arena/sessions/:sessionId/interrupt` | 中断运行中的会话 |
 | `POST` | `/api/arena/poster` | 生成信息图 / 海报资源 |
 | `GET` | `/api/admin/import-status` | 查看默认人物导入状态 |
@@ -117,14 +119,15 @@ Content-Type: application/json
 
 ### 3.3 Arena 讨论 / 辩论
 
-1. 选择 `2 ~ 3` 个阶段人格
+1. 选择至少 `2` 个阶段人格
 2. 准备 `topic + mode + selectedAgentIds + agents`
-3. 按需要补充 `reasoningEffort / roundCount / maxMessageChars / guidance`
+3. 按需要补充 `reasoningEffort / roundCount / maxMessageChars / guidance / pendingUserMessages`
 4. 如果是连续会话，传 `continueFromRunId`，可选再传 `sessionId`
 5. 如果需要实时 UI，走 `POST /api/arena/stream`
-6. 如果只要最终结果，走 `POST /api/arena/run`
-7. 结果保存后，可用 `GET /api/arena/runs/:runId` 回放
-8. 如果要生成信息图，调 `POST /api/arena/poster`
+6. 如果用户在流式进行中临时插话，调 `POST /api/arena/sessions/:sessionId/messages`
+7. 如果只要最终结果，走 `POST /api/arena/run`
+8. 结果保存后，可用 `GET /api/arena/runs/:runId` 回放
+9. 如果要生成信息图，调 `POST /api/arena/poster`
 
 ## 4. 核心数据模型
 
@@ -547,6 +550,11 @@ interface ArenaRunRequest {
   roundCount?: number
   maxMessageChars?: number
   guidance?: string
+  pendingUserMessages?: Array<{
+    id?: string
+    content: string
+    createdAt?: string
+  }>
   continueFromRunId?: string
   sessionId?: string
 }
@@ -556,17 +564,21 @@ interface ArenaRunRequest {
 
 - `topic`: 必填
 - `mode`: `chat | debate`
-- `selectedAgentIds`: `2 ~ 3`
+- `selectedAgentIds`: 至少 `2`
 - `agents`: 至少 2 个
-- `roundCount`: `1 ~ 20`
+- `roundCount`: 正整数，不设上限
 - `maxMessageChars`: `60 ~ 500`
 - `guidance`: trim 后 `1 ~ 1000`
+- `pendingUserMessages[*].content`: trim 后 `1 ~ 4000`
 
 重要语义：
 
 - `agents` 是完整候选人格集合
 - `selectedAgentIds` 决定本次真正参会的人
 - 若按 `selectedAgentIds` 过滤后少于 2 人，服务端会报错
+- `pendingUserMessages` 会按顺序写成多条 `kind: 'user'` 消息，再继续后续多角色讨论
+- 当前不再限制参会人数上限，但参与者越多，讨论耗时、上下文长度和生成成本都会明显上升
+- 当前不再限制轮数上限，但轮数越大，总耗时会随轮数和参与人数线性增长
 - 若传 `continueFromRunId`，新 transcript 会继承上一条对话
 - 若未显式传 `sessionId`，服务端会尽量沿用会话链上的 `sessionId`
 
@@ -584,6 +596,7 @@ interface ArenaRunRequest {
 - `chat` 的典型阶段：`opening -> reflection -> synthesis`
 - `debate` 的典型阶段：`opening -> rebuttal -> closing`
 - `guidance` 会转成一条 `kind: 'user'` 的消息写入结果
+- `pendingUserMessages` 会转成多条 `kind: 'user'` 的消息写入结果
 - 结果会持久化到数据库，可再通过 `GET /api/arena/runs/:runId` 拉取
 
 ## 5.7 `POST /api/arena/stream`
@@ -837,7 +850,42 @@ Path 参数：
 - 这个接口只影响当前进程内的运行状态
 - 会话结束后或服务重启后，这个 sessionId 就不会再存在
 
-## 5.11 `POST /api/arena/poster`
+## 5.11 `POST /api/arena/sessions/:sessionId/messages`
+
+用途：向正在流式运行的会话实时插入一条用户消息，并触发安全打断。
+
+Path 参数：
+
+- `sessionId: string`
+
+请求体：
+
+```ts
+{
+  content: string
+  clientMessageId?: string
+  createdAt?: string
+}
+```
+
+成功响应：
+
+```json
+{
+  "ok": true,
+  "sessionId": "session-xxx",
+  "queuedMessages": 1
+}
+```
+
+说明：
+
+- 后端会先把这条消息加入当前会话的待插入队列
+- 如果当前正有 speaker 在生成，后端会立即打断当前生成
+- 前端重新续流后，这条消息会以正式 `kind: "user"` 消息写回 transcript
+- `clientMessageId` 适合前端做乐观更新，等服务端回放同 id 消息时再对齐
+
+## 5.12 `POST /api/arena/poster`
 
 用途：为某次讨论结果生成信息图 / 海报资源。
 

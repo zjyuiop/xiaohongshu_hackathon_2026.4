@@ -4,6 +4,11 @@
 /.idea
 **/build
 /.hvigor
+/signing
+/tmp_arena_body.json
+/.cursorrules
+/优化画面布局/node_modules
+/优化画面布局/dist
 .cxx
 /.clangd
 /.clang-format

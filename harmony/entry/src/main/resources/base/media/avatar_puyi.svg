@@ -1,0 +1,23 @@
+<svg width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="puyi_bg" x1="30" y1="18" x2="130" y2="142" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F3EDC9"/>
+      <stop offset="1" stop-color="#DAB75C"/>
+    </linearGradient>
+    <linearGradient id="puyi_robe" x1="80" y1="98" x2="80" y2="146" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E2B94F"/>
+      <stop offset="1" stop-color="#B7882E"/>
+    </linearGradient>
+  </defs>
+  <circle cx="80" cy="80" r="72" fill="url(#puyi_bg)"/>
+  <path d="M38 145C44 116 59 100 80 100C101 100 116 116 122 145H38Z" fill="url(#puyi_robe)"/>
+  <circle cx="80" cy="72" r="29" fill="#F1C7A8"/>
+  <path d="M55 69C58 47 68 37 80 37C94 37 103 47 105 69C99 60 90 55 80 55C70 55 61 59 55 69Z" fill="#23262F"/>
+  <rect x="53" y="35" width="54" height="10" rx="5" fill="#214D47"/>
+  <rect x="61" y="24" width="38" height="16" rx="8" fill="#1D3E39"/>
+  <circle cx="80" cy="32" r="5" fill="#F7D46C"/>
+  <path d="M68 78H74" stroke="#543A30" stroke-width="3" stroke-linecap="round"/>
+  <path d="M86 78H92" stroke="#543A30" stroke-width="3" stroke-linecap="round"/>
+  <path d="M74 90C77 92 83 92 86 90" stroke="#AB7058" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M60 111C66 104 73 101 80 101C87 101 94 104 100 111" stroke="#F4D679" stroke-width="4" stroke-linecap="round"/>
+</svg>

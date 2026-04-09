@@ -235,7 +235,7 @@ export function buildMockArena(
   selectedAgentIds: string[],
   agents: PersonaSpec[],
 ): ArenaRun {
-  const participants = agents.filter((agent) => selectedAgentIds.includes(agent.agentId)).slice(0, 3)
+  const participants = agents.filter((agent) => selectedAgentIds.includes(agent.agentId))
   const messages = participants.flatMap((agent, index) => [
     {
       id: `mock-${index}-1`,

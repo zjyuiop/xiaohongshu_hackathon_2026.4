@@ -1,9 +1,41 @@
-import { ArenaMessage, ArenaMode, PersonaSpec, PresetProfile, ProfileBundle, SourceDocumentSummary, TimelineNode, EMPTY_PROFILE } from '../common/Models'
+import { router } from '@kit.ArkUI'
+import { common } from '@kit.AbilityKit'
+import pasteboard from '@ohos.pasteboard'
+import promptAction from '@ohos.promptAction'
+import {
+  ArenaMessage,
+  ArenaMode,
+  ArenaRunHistoryItem,
+  PersonaSpec,
+  PresetProfile,
+  ProfileBundle,
+  SourceDocumentSummary,
+  TimelineNode,
+  EMPTY_PROFILE
+} from '../common/Models'
+import { fetchSafeAreaInsets } from '../common/WindowSafeArea'
 import { PersonaApi } from '../service/PersonaApi'
+import { formatTimeAgo, getAvatarTextColor, getParticipantColor } from '../service/SummaryService'
+import { Colors } from '../common/styles/Colors'
+import { Typography } from '../common/styles/Typography'
+import { Spacing } from '../common/styles/Spacing'
+import { BorderRadius } from '../common/styles/BorderRadius'
+import {
+  HeroSection,
+  LoadingOverlay,
+  ErrorToast,
+  RoleCard,
+  TabBar,
+  RecordsTab,
+  RecordItem,
+  RoleHomeActionCards,
+  ImportForm
+} from '../components'
 
 @Entry
 @Component
 struct Index {
+  // 状态管理
   @State profiles: PresetProfile[] = []
   @State customProfiles: PresetProfile[] = []
   @State cachedCustomBundles: ProfileBundle[] = []
@@ -22,19 +54,27 @@ struct Index {
   @State loading: string = ''
   @State error: string = ''
   @State activeTab: number = 0
+  @State rolePaneOpacity: number = 1
+  @State rolePaneY: number = 0
+  @State arenaTitleOpacity: number = 0
+  @State arenaTitleY: number = 18
+  @State arenaBodyOpacity: number = 0
+  @State arenaBodyY: number = 22
+  @State recordsPaneOpacity: number = 0
+  @State recordsPaneY: number = 16
   @State rolePanel: number = 0
   @State showImportForm: boolean = false
+  @State importFormExpanded: boolean = false
+  @State importEntryMode: string = 'import'
   @State importName: string = ''
   @State importBio: string = ''
-  @State connectionLabel: string = 'CONNECTING'
-  @State sourceDocumentTitle: string = ''
-  @State sourceDocumentAuthor: string = ''
-  @State sourceDocumentMeta: string = ''
+  @State connectionLabel: string = '连接中'
+  @State sourceDocument: SourceDocumentSummary | null = null
+  @State safeTopVp: number = 0
+  @State safeBottomVp: number = 0
+  @State records: RecordItem[] = []
 
-  aboutToAppear(): void {
-    void this.hydratePresets()
-  }
-
+  // 计算属性
   allProfiles(): PresetProfile[] {
     return [...this.profiles, ...this.customProfiles]
   }
@@ -43,87 +83,38 @@ struct Index {
     return this.agents.filter((agent: PersonaSpec) => this.selectedAgentIds.includes(agent.agentId))
   }
 
-  hasActiveProfile(profileId: string): boolean {
-    return this.selectedProfile.id === profileId
-  }
-
-  agentAt(index: number): PersonaSpec | null {
-    if (index < 0 || index >= this.agents.length) {
-      return null
-    }
-    return this.agents[index]
-  }
-
-  isNodeSelected(index: number): boolean {
-    const agent = this.agentAt(index)
-    return agent ? this.selectedAgentIds.includes(agent.agentId) : false
-  }
-
-  isDiscussionMode(mode: ArenaMode): boolean {
-    return this.discussionMode === mode
-  }
-
-  isActiveTab(index: number): boolean {
-    return this.activeTab === index
-  }
-
-  isRolePanel(index: number): boolean {
-    return this.rolePanel === index
-  }
-
   hasSelectedProfile(): boolean {
     return this.selectedProfile.id.length > 0
-  }
-
-  hasSourceDocumentInfo(): boolean {
-    return this.sourceDocumentTitle.length > 0
   }
 
   hasSummaryContent(): boolean {
     return this.summaryTitle.length > 0
   }
 
-  switchRolePanel(index: number): void {
-    this.rolePanel = index
+  // 生命周期
+  aboutToAppear(): void {
+    void this.hydratePresets()
+    this.loadSafeInsets()
+    void this.loadMeetingRecords()
   }
 
-  currentPageLabel(): string {
-    if (this.activeTab === 0) {
-      return this.isRolePanel(0) ? '人物选择' : '阶段人格'
-    }
-    if (this.activeTab === 1) {
-      return '议会'
-    }
-    return '纪要'
+  onPageShow(): void {
+    void this.loadMeetingRecords()
   }
 
-  currentPageDescription(): string {
-    if (this.activeTab === 0) {
-      if (!this.hasSelectedProfile()) {
-        return '先选择人物，再进入阶段人格面板完成议会编组。'
-      }
-      return this.isRolePanel(0)
-        ? `当前人物：${this.selectedProfile.displayName}，先看摘要与议题，再进入阶段人格。`
-        : `为 ${this.selectedProfile.displayName} 选择 2 到 3 个阶段人格进入议会。`
+  loadSafeInsets(): void {
+    try {
+      const ctx = getContext(this) as common.UIAbilityContext
+      fetchSafeAreaInsets(ctx).then((insets) => {
+        this.safeTopVp = insets.topVp
+        this.safeBottomVp = insets.bottomVp
+      })
+    } catch (_e) {
+      // 忽略错误，使用默认值
     }
-    if (this.activeTab === 1) {
-      return this.hasSelectedProfile()
-        ? `${this.selectedProfile.displayName} 的阶段议会已经就绪，输入议题后即可开始。`
-        : '先在角色页完成编组，再来这里发起讨论。'
-    }
-    return this.hasSummaryContent()
-      ? '议会已经生成纪要，可在这里快速回看共识、分歧与行动建议。'
-      : '纪要页承接议会结果，在移动端只保留最关键的输出。'
   }
 
-  normalizeError(error: Object): string {
-    const maybeMessage = error as Record<string, string>
-    if (maybeMessage.message) {
-      return maybeMessage.message
-    }
-    return '请求失败，请检查后端或网络设置'
-  }
-
+  // 业务方法
   refreshConnectionLabel(): void {
     this.connectionLabel = PersonaApi.getConnectionLabel()
   }
@@ -137,24 +128,12 @@ struct Index {
     this.narrativeHook = ''
   }
 
-  applySourceDocument(sourceDocument?: SourceDocumentSummary | null): void {
-    this.sourceDocumentTitle = sourceDocument && sourceDocument.title ? sourceDocument.title : ''
-    this.sourceDocumentAuthor = sourceDocument && sourceDocument.author ? sourceDocument.author : ''
-
-    if (sourceDocument && sourceDocument.sectionCount > 0) {
-      this.sourceDocumentMeta = `${sourceDocument.sectionCount} sections`
-      return
-    }
-
-    this.sourceDocumentMeta = ''
-  }
-
   applyBundle(bundle: ProfileBundle): void {
     this.selectedProfile = bundle.profile
     this.nodes = bundle.nodes
     this.agents = bundle.agents
     this.selectedAgentIds = bundle.agents.slice(0, 2).map((agent: PersonaSpec) => agent.agentId)
-    this.applySourceDocument(bundle.sourceDocument)
+    this.sourceDocument = bundle.sourceDocument || null
     this.resetArena()
 
     if (bundle.profile.suggestedTopics.length > 0) {
@@ -173,6 +152,14 @@ struct Index {
   findCachedCustomBundle(profileId: string): ProfileBundle | null {
     const found = this.cachedCustomBundles.find((bundle: ProfileBundle) => bundle.profile.id === profileId)
     return found ? found : null
+  }
+
+  normalizeError(error: Object): string {
+    const maybeMessage = error as Record<string, string>
+    if (maybeMessage.message) {
+      return maybeMessage.message
+    }
+    return '请求失败，请检查后端或网络设置'
   }
 
   async hydratePresets(): Promise<void> {
@@ -224,16 +211,146 @@ struct Index {
       return
     }
 
-    if (this.selectedAgentIds.length >= 3) {
-      this.selectedAgentIds = [...this.selectedAgentIds.slice(1), agentId]
-      return
-    }
-
     this.selectedAgentIds = [...this.selectedAgentIds, agentId]
   }
 
   switchTab(index: number): void {
-    this.activeTab = index
+    if (index === 1) {
+      this.arenaTitleOpacity = 0
+      this.arenaTitleY = 18
+      this.arenaBodyOpacity = 0
+      this.arenaBodyY = 22
+    } else if (index === 2) {
+      this.recordsPaneOpacity = 0
+      this.recordsPaneY = 16
+    } else if (index === 0) {
+      this.rolePaneOpacity = 0
+      this.rolePaneY = 14
+    }
+
+    animateTo({
+      duration: 220,
+      curve: Curve.FastOutSlowIn
+    }, () => {
+      this.activeTab = index
+      if (index === 2) {
+        void this.loadMeetingRecords()
+      }
+    })
+
+    if (index === 1) {
+      setTimeout(() => {
+        animateTo({
+          duration: 380,
+          curve: Curve.FastOutSlowIn
+        }, () => {
+          this.arenaTitleOpacity = 1
+          this.arenaTitleY = 0
+        })
+      }, 48)
+      setTimeout(() => {
+        animateTo({
+          duration: 440,
+          curve: Curve.Friction
+        }, () => {
+          this.arenaBodyOpacity = 1
+          this.arenaBodyY = 0
+        })
+      }, 120)
+    } else if (index === 2) {
+      setTimeout(() => {
+        animateTo({
+          duration: 400,
+          curve: Curve.FastOutSlowIn
+        }, () => {
+          this.recordsPaneOpacity = 1
+          this.recordsPaneY = 0
+        })
+      }, 40)
+    } else if (index === 0) {
+      setTimeout(() => {
+        animateTo({
+          duration: 360,
+          curve: Curve.FastOutSlowIn
+        }, () => {
+          this.rolePaneOpacity = 1
+          this.rolePaneY = 0
+        })
+      }, 0)
+    }
+  }
+
+  mapHistoryItemToRecord(item: ArenaRunHistoryItem): RecordItem {
+    const names = item.participantNames
+    const avatarColors = names.map((_n: string, idx: number) => getParticipantColor(idx))
+    const avatarTextColors = names.map((_n: string, idx: number) => getAvatarTextColor(idx))
+    const title = item.title && item.title.length > 0
+      ? item.title
+      : (item.summaryTitle && item.summaryTitle.length > 0 ? item.summaryTitle : '会议纪要')
+    const content = item.consensusPreview && item.consensusPreview.length > 0
+      ? item.consensusPreview
+      : (item.consensus && item.consensus.length > 0 ? item.consensus : '')
+    const participantLine = names.length > 0 ? names.join(' · ') : '暂无参会者'
+    return {
+      id: item.runId,
+      title: title,
+      topic: item.topic,
+      participants: names,
+      participantLine: participantLine,
+      avatarColors: avatarColors,
+      avatarTextColors: avatarTextColors,
+      content: content,
+      timeAgo: item.createdAt ? formatTimeAgo(item.createdAt) : '刚刚',
+      accentColor: avatarColors.length > 0 ? avatarColors[0] : Colors.primary,
+      messageCount: item.messageCount !== undefined ? item.messageCount : 0,
+      highlightCount: 0,
+      durationLabel: item.mode === 'debate' ? '辩论' : '对谈',
+      isFavorite: false
+    }
+  }
+
+  async loadMeetingRecords(): Promise<void> {
+    try {
+      const history = await PersonaApi.getArenaHistory(50)
+      this.records = history.runs.map((run: ArenaRunHistoryItem) => this.mapHistoryItemToRecord(run))
+      this.refreshConnectionLabel()
+    } catch (_error) {
+      this.refreshConnectionLabel()
+    }
+  }
+
+  async handleGenerateShareCard(record: RecordItem): Promise<void> {
+    if (record.id.length === 0) {
+      this.error = '缺少会议 runId，无法生成卡片'
+      return
+    }
+    this.loading = ''
+    this.refreshConnectionLabel()
+    router.pushUrl({
+      url: 'pages/PosterPreviewPage',
+      params: {
+        arenaRunId: record.id,
+        title: record.title
+      }
+    })
+  }
+
+  openImportSheet(mode: string): void {
+    this.importEntryMode = mode
+    this.showImportForm = true
+    this.importFormExpanded = true
+  }
+
+  closeImportSheet(): void {
+    this.showImportForm = false
+    this.importFormExpanded = false
+    this.importName = ''
+    this.importBio = ''
+  }
+
+  async openTimelineFromCard(profile: PresetProfile): Promise<void> {
+    await this.selectProfile(profile)
+    this.goProfileDetail()
   }
 
   async importCustomProfile(): Promise<void> {
@@ -249,9 +366,7 @@ struct Index {
       const bundle = await PersonaApi.importCustomProfile(this.importName.trim(), this.importBio.trim())
       this.cacheCustomBundle(bundle)
       this.applyBundle(bundle)
-      this.showImportForm = false
-      this.importName = ''
-      this.importBio = ''
+      this.closeImportSheet()
       this.activeTab = 0
       this.refreshConnectionLabel()
     } catch (error) {
@@ -281,6 +396,7 @@ struct Index {
       this.actionableAdvice = result.summary.actionableAdvice
       this.narrativeHook = result.summary.narrativeHook
       this.refreshConnectionLabel()
+      void this.loadMeetingRecords()
     } catch (error) {
       this.error = this.normalizeError(error as Object)
       this.refreshConnectionLabel()
@@ -289,742 +405,370 @@ struct Index {
     }
   }
 
-  stageColor(stageType: string): string {
-    if (stageType === 'early') {
-      return '#00E5FF'
-    }
-    if (stageType === 'turning-point') {
-      return '#48E3C2'
-    }
-    if (stageType === 'crisis') {
-      return '#FF5A76'
-    }
-    if (stageType === 'rebuild') {
-      return '#9C5CFF'
-    }
-    if (stageType === 'peak') {
-      return '#FFD166'
-    }
-    return '#8A90A4'
-  }
-
-  stanceColor(stance: string): string {
-    if (stance === 'support') {
-      return '#00E5FF'
-    }
-    if (stance === 'oppose') {
-      return '#FF5A76'
-    }
-    if (stance === 'reflective') {
-      return '#9C5CFF'
-    }
-    return '#8A90A4'
-  }
-
-  @Builder
-  buildHeroSection() {
-    Column({ space: 10 }) {
-      Text('TIME PERSONA / HARMONY')
-        .fontSize(12)
-        .fontColor('#00E5FF')
-        .letterSpacing(2.4)
-
-      Text('时序人格局')
-        .fontSize(32)
-        .fontWeight(FontWeight.Bold)
-        .fontColor('#F6F8FF')
-
-      Text(this.selectedProfile.id.length > 0
-        ? `${this.selectedProfile.displayName} · 三段移动工作台`
-        : '用底部三按钮切换角色、议会与纪要，保留 web 版三栏工作台的职责拆分。')
-        .fontSize(14)
-        .fontColor('#98A2B3')
-        .lineHeight(22)
-
-      Row({ space: 8 }) {
-        Text(this.connectionLabel)
-          .fontSize(11)
-          .fontColor('#DDE6FF')
-          .maxLines(1)
-          .padding({ left: 10, right: 10, top: 6, bottom: 6 })
-          .backgroundColor('#141B25')
-          .borderRadius(99)
-
-        Text('MOBILE WORKBENCH')
-          .fontSize(11)
-          .fontColor('#9C5CFF')
-          .padding({ left: 10, right: 10, top: 6, bottom: 6 })
-          .backgroundColor('#191327')
-          .borderRadius(99)
-      }
-      .width('100%')
-    }
-    .width('100%')
-    .alignItems(HorizontalAlign.Start)
-    .padding(20)
-    .backgroundColor('#CC11131A')
-    .borderRadius(28)
-  }
-
-  @Builder
-  buildErrorCard() {
-    if (this.error.length > 0) {
-      Text(this.error)
-        .width('100%')
-        .fontSize(13)
-        .fontColor('#FF8EA1')
-        .lineHeight(20)
-        .padding(16)
-        .backgroundColor('#24121A')
-        .borderRadius(20)
-    }
-  }
-
-  @Builder
-  buildLoadingCard() {
-    if (this.loading.length > 0) {
-      Text(this.loading)
-        .width('100%')
-        .fontSize(13)
-        .fontColor('#8BE9FF')
-        .lineHeight(20)
-        .padding(16)
-        .backgroundColor('#101A22')
-        .borderRadius(20)
-    }
-  }
-
-  @Builder
-  buildRoleCard(profile: PresetProfile) {
-    Button() {
-      Column({ space: 10 }) {
-        Row() {
-          Text(profile.category.toUpperCase())
-            .fontSize(11)
-            .fontColor(this.hasActiveProfile(profile.id) ? '#00E5FF' : '#7B8497')
-          Blank()
-          Text(profile.coverSeed)
-            .fontSize(11)
-            .fontColor('#667085')
-        }
-        .width('100%')
-
-        Text(profile.displayName)
-          .fontSize(22)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#F6F8FF')
-
-        Text(profile.subtitle)
-          .fontSize(13)
-          .fontColor('#C6A4FF')
-
-        Text(profile.biography)
-          .fontSize(13)
-          .fontColor('#AAB3C5')
-          .lineHeight(20)
-          .maxLines(4)
-
-        if (profile.highlights.length > 0) {
-          Flex({ direction: FlexDirection.Row, wrap: FlexWrap.Wrap }) {
-            ForEach(profile.highlights.slice(0, 4), (item: string) => {
-              Text(item)
-                .fontSize(11)
-                .fontColor('#D6DCE7')
-                .padding({ left: 10, right: 10, top: 6, bottom: 6 })
-                .backgroundColor('#171B24')
-                .borderRadius(99)
-                .margin({ right: 8, bottom: 8 })
-            }, (item: string) => item)
-          }
-          .width('100%')
-        }
-      }
-      .width('100%')
-      .alignItems(HorizontalAlign.Start)
-      .padding(18)
-      .backgroundColor(this.hasActiveProfile(profile.id) ? '#151C25' : '#10131A')
-      .borderRadius(24)
-    }
-    .width('100%')
-    .backgroundColor('#00000000')
-    .borderRadius(24)
-    .onClick(() => {
-      void this.selectProfile(profile)
-    })
-  }
-
-  @Builder
-  buildTimelineNode(node: TimelineNode, index: number) {
-    Button() {
-      Column({ space: 10 }) {
-        Row() {
-          Text(`${index + 1}`)
-            .fontSize(11)
-            .fontColor('#F6F8FF')
-            .width(26)
-            .height(26)
-            .textAlign(TextAlign.Center)
-            .backgroundColor(this.stageColor(node.stageType))
-            .borderRadius(13)
-
-          Text(node.timeLabel + (node.ageLabel ? ` · ${node.ageLabel}` : ''))
-            .fontSize(12)
-            .fontColor('#98A2B3')
-            .margin({ left: 10 })
-
-          Blank()
-
-          Text(this.isNodeSelected(index) ? 'IN' : 'ADD')
-            .fontSize(11)
-            .fontColor(this.isNodeSelected(index) ? '#00E5FF' : '#667085')
-        }
-        .width('100%')
-
-        Text(node.stageLabel)
-          .fontSize(20)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#F6F8FF')
-
-        Text(node.keyEvent)
-          .fontSize(13)
-          .fontColor('#D7DEEA')
-          .lineHeight(20)
-
-        Text(node.summary)
-          .fontSize(12)
-          .fontColor('#98A2B3')
-          .lineHeight(20)
-          .maxLines(3)
-
-        if (this.agentAt(index)) {
-          Text(this.isNodeSelected(index) ? '点击移出议会' : '点击接入议会')
-            .fontSize(12)
-            .fontColor(this.isNodeSelected(index) ? '#00E5FF' : '#C6A4FF')
-        }
-      }
-      .width('100%')
-      .alignItems(HorizontalAlign.Start)
-      .padding(18)
-      .backgroundColor(this.isNodeSelected(index) ? '#151E28' : '#10131A')
-      .borderRadius(22)
-    }
-    .width('100%')
-    .backgroundColor('#00000000')
-    .onClick(() => {
-      const nodeAgent = this.agentAt(index)
-      if (nodeAgent) {
-        this.toggleAgent(nodeAgent.agentId)
+  goProfileDetail(): void {
+    router.pushUrl({
+      url: 'pages/ProfileDetail',
+      params: {
+        profileId: this.selectedProfile.id,
+        selectedAgentIds: this.selectedAgentIds.join(',')
       }
     })
   }
 
+  handleRetry(): void {
+    void this.hydratePresets()
+  }
+
+  // Tab 内容构建器
   @Builder
   buildRoleTab() {
-    Column({ space: 16 }) {
-      Column({ space: 12 }) {
-        Row() {
-          Text('ROLE / SOURCE')
-            .fontSize(12)
-            .fontColor('#00E5FF')
-            .letterSpacing(2)
-
-          Blank()
-
-          Button(this.showImportForm ? '收起导入' : '导入传记')
-            .height(36)
-            .backgroundColor('#171B24')
-            .fontColor('#F6F8FF')
-            .borderRadius(99)
-            .onClick(() => {
-              this.showImportForm = !this.showImportForm
-            })
+    Column({ space: Spacing.card.large }) {
+      RoleHomeActionCards({
+        onCreateClick: () => {
+          router.pushUrl({ url: 'pages/CreateRole' })
+        },
+        onImportClick: () => {
+          this.openImportSheet('import')
+        },
+        onExploreClick: () => {
+          router.pushUrl({ url: 'pages/ExplorePersonas' })
         }
-        .width('100%')
+      })
 
-        if (this.showImportForm) {
-          Column({ space: 10 }) {
-            Text('自定义人物导入')
-              .fontSize(18)
-              .fontWeight(FontWeight.Bold)
-              .fontColor('#F6F8FF')
-
-            Text('这里直接走后端的 parse -> build 链路，生成时间线节点与阶段人格。')
-              .fontSize(13)
-              .fontColor('#98A2B3')
-              .lineHeight(20)
-
-            TextInput({ text: this.importName, placeholder: '人物名称' })
-              .backgroundColor('#0A0D12')
-              .borderRadius(16)
-              .fontColor('#F6F8FF')
-              .placeholderColor('#667085')
-              .onChange((value: string) => {
-                this.importName = value
-              })
-
-            TextArea({ text: this.importBio, placeholder: '粘贴人物背景、传记或经历摘要' })
-              .backgroundColor('#0A0D12')
-              .borderRadius(16)
-              .fontColor('#F6F8FF')
-              .placeholderColor('#667085')
-              .height(180)
-              .onChange((value: string) => {
-                this.importBio = value
-              })
-
-            Button('解析传记并生成阶段人格')
-              .width('100%')
-              .height(46)
-              .backgroundColor('#171F2A')
-              .fontColor('#00E5FF')
-              .borderRadius(99)
-              .onClick(() => {
-                void this.importCustomProfile()
-              })
+      if (this.showImportForm) {
+        ImportForm({
+          isExpanded: this.importFormExpanded,
+          name: this.importName,
+          bio: this.importBio,
+          isLoading: this.loading.length > 0,
+          importMode: this.importEntryMode,
+          showCloseButton: true,
+          onNameChange: (value: string) => {
+            this.importName = value
+          },
+          onBioChange: (value: string) => {
+            this.importBio = value
+          },
+          onSubmit: () => {
+            void this.importCustomProfile()
+          },
+          onToggle: () => {
+            this.importFormExpanded = !this.importFormExpanded
+          },
+          onClose: () => {
+            this.closeImportSheet()
           }
-          .width('100%')
-          .alignItems(HorizontalAlign.Start)
-          .padding(18)
-          .backgroundColor('#CC11131A')
-          .borderRadius(24)
-        }
+        })
       }
-      .width('100%')
-      .alignItems(HorizontalAlign.Start)
 
-      ForEach(this.allProfiles(), (profile: PresetProfile) => {
-        this.buildRoleCard(profile)
-      }, (profile: PresetProfile) => profile.id)
-
-      if (this.selectedProfile.id.length > 0) {
-        Column({ space: 14 }) {
-          Text('TIMELINE / SELECT AGENTS')
-            .fontSize(12)
-            .fontColor('#00E5FF')
-            .letterSpacing(2)
-
-          Text(this.selectedProfile.displayName)
-            .fontSize(24)
+      Column({ space: Spacing.md }) {
+        Row() {
+          Text(`已收集的切片 (${this.allProfiles().length})`)
+            .fontSize(Typography.size.sm)
             .fontWeight(FontWeight.Bold)
-            .fontColor('#F6F8FF')
-
-          Text(this.selectedProfile.biography)
-            .fontSize(13)
-            .fontColor('#AAB3C5')
-            .lineHeight(21)
-
-          if (this.selectedProfile.suggestedTopics.length > 0) {
-            Flex({ direction: FlexDirection.Row, wrap: FlexWrap.Wrap }) {
-              ForEach(this.selectedProfile.suggestedTopics.slice(0, 4), (item: string) => {
-                Button(item)
-                  .height(34)
-                  .backgroundColor('#171B24')
-                  .fontColor('#C6A4FF')
-                  .borderRadius(99)
-                  .margin({ right: 8, bottom: 8 })
-                  .onClick(() => {
-                    this.topic = item
-                    this.activeTab = 1
-                  })
-              }, (item: string) => item)
-            }
-            .width('100%')
-          }
-
-          Row() {
-            Text(`已接入 ${this.selectedAgentIds.length} / 3`)
-              .fontSize(13)
-              .fontColor('#98A2B3')
-            Blank()
-            Button('进入议会')
-              .height(38)
-              .backgroundColor('#00E5FF')
-              .fontColor('#041017')
-              .borderRadius(99)
-              .enabled(this.selectedAgentIds.length >= 2)
-              .opacity(this.selectedAgentIds.length >= 2 ? 1 : 0.45)
-              .onClick(() => {
-                this.activeTab = 1
-              })
-          }
-          .width('100%')
+            .fontColor(Colors.textMuted)
+            .letterSpacing(0.5)
         }
         .width('100%')
-        .alignItems(HorizontalAlign.Start)
-        .padding(20)
-        .backgroundColor('#CC11131A')
-        .borderRadius(24)
 
-        ForEach(this.nodes, (node: TimelineNode, index: number) => {
-          this.buildTimelineNode(node, index)
-        }, (node: TimelineNode) => node.nodeId)
+        Column({ space: Spacing.card.medium }) {
+          ForEach(this.allProfiles(), (profile: PresetProfile, index: number) => {
+            RoleCard({
+              profile: profile,
+              isActive: this.selectedProfile.id === profile.id,
+              index: index,
+              onCardClick: (p: PresetProfile) => {
+                void this.selectProfile(p)
+              },
+              onViewTimeline: () => {
+                void this.openTimelineFromCard(profile)
+              }
+            })
+          }, (profile: PresetProfile) => profile.id)
+        }
+        .width('100%')
       }
     }
     .width('100%')
     .alignItems(HorizontalAlign.Start)
-  }
-
-  @Builder
-  buildModeButton(label: string, mode: ArenaMode) {
-    Button(label)
-      .height(34)
-      .backgroundColor(this.isDiscussionMode(mode) ? '#00E5FF' : '#171B24')
-      .fontColor(this.isDiscussionMode(mode) ? '#041017' : '#D6DCE7')
-      .borderRadius(99)
-      .onClick(() => {
-        this.discussionMode = mode
-      })
+    .opacity(this.rolePaneOpacity)
+    .translate({ y: this.rolePaneY })
+    .animation({
+      duration: 360,
+      curve: Curve.FastOutSlowIn
+    })
   }
 
   @Builder
   buildArenaTab() {
-    Column({ space: 16 }) {
-      Column({ space: 12 }) {
-        Text('ARENA / COUNCIL')
-          .fontSize(12)
-          .fontColor('#00E5FF')
-          .letterSpacing(2)
-
-        Text(this.selectedProfile.id.length > 0 ? `${this.selectedProfile.displayName} 的阶段议会` : '先去角色页选择人物')
-          .fontSize(26)
+    Column({ space: Spacing.card.large }) {
+      Column({ space: Spacing.sm }) {
+        Text('人格会议')
+          .fontSize(Typography.size.xxl)
           .fontWeight(FontWeight.Bold)
-          .fontColor('#F6F8FF')
+          .fontColor(Colors.textPrimary)
 
-        Text('默认人物直接读取 /api/profiles/:id，自定义人物走 parse + build，再把 2 到 3 个 agent 带进 arena。')
-          .fontSize(13)
-          .fontColor('#98A2B3')
-          .lineHeight(20)
-
-        Row({ space: 8 }) {
-          this.buildModeButton('CHAT', 'chat')
-          this.buildModeButton('DEBATE', 'debate')
-        }
+        Text('选择人物的不同人生阶段人格，让他们围绕议题展开讨论，汇聚多元观点。')
+          .fontSize(Typography.size.bodyLg)
+          .fontColor(Colors.textTertiary)
       }
       .width('100%')
       .alignItems(HorizontalAlign.Start)
-      .padding(20)
-      .backgroundColor('#CC11131A')
-      .borderRadius(24)
+      .opacity(this.arenaTitleOpacity)
+      .translate({ y: this.arenaTitleY })
+      .animation({
+        duration: 400,
+        curve: Curve.FastOutSlowIn
+      })
 
-      Column({ space: 12 }) {
-        Text('已接入人格')
-          .fontSize(14)
-          .fontColor('#98A2B3')
+      Column({ space: Spacing.md }) {
+        if (this.selectedProfile.id.length > 0) {
+          Column({ space: Spacing.md }) {
+            Text(`当前人物：${this.selectedProfile.displayName}`)
+              .fontSize(Typography.size.bodyLg)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(Colors.textPrimary)
 
-        if (this.selectedAgents().length > 0) {
-          Flex({ direction: FlexDirection.Row, wrap: FlexWrap.Wrap }) {
-            ForEach(this.selectedAgents(), (agent: PersonaSpec) => {
-              Column({ space: 4 }) {
-                Text(agent.stageLabel)
-                  .fontSize(13)
-                  .fontWeight(FontWeight.Medium)
-                  .fontColor('#F6F8FF')
-
-                Text(agent.timeLabel)
-                  .fontSize(11)
-                  .fontColor('#98A2B3')
-              }
-              .padding({ left: 12, right: 12, top: 10, bottom: 10 })
-              .backgroundColor('#161B24')
-              .borderRadius(18)
-              .margin({ right: 8, bottom: 8 })
-            }, (agent: PersonaSpec) => agent.agentId)
+            Text(`可选人格阶段：${this.agents.length} 个`)
+              .fontSize(Typography.size.body)
+              .fontColor(Colors.textSecondary)
           }
           .width('100%')
-        } else {
-          Text('去角色页选择至少 2 个阶段人格后，这里会显示参会阵容。')
-            .fontSize(13)
-            .fontColor('#98A2B3')
-            .lineHeight(20)
+          .padding(Spacing.card.large)
+          .backgroundColor(Colors.cardPrimary)
+          .borderRadius(BorderRadius.huge)
         }
 
-        TextArea({ text: this.topic, placeholder: '输入议题，例如：现在该不该继续创业？' })
-          .backgroundColor('#0A0D12')
-          .borderRadius(18)
-          .fontColor('#F6F8FF')
-          .placeholderColor('#667085')
-          .height(150)
-          .onChange((value: string) => {
-            this.topic = value
-          })
-
-        Button('启动议会')
+        Button('开始人格会议')
           .width('100%')
-          .height(48)
-          .backgroundColor('#00E5FF')
-          .fontColor('#041017')
-          .borderRadius(99)
-          .enabled(this.selectedAgents().length >= 2 && this.loading.length === 0)
-          .opacity(this.selectedAgents().length >= 2 && this.loading.length === 0 ? 1 : 0.45)
+          .height(46)
+          .fontSize(Typography.size.bodyLg)
+          .fontColor('#FFFFFF')
+          .backgroundColor(Colors.primary)
+          .borderRadius(BorderRadius.huge)
+          .stateEffect(true)
+          .enabled(this.selectedProfile.id.length > 0)
           .onClick(() => {
-            void this.runDiscussion()
+            router.pushUrl({
+              url: 'pages/MeetingParticipantPage',
+              params: {
+                profileId: this.selectedProfile.id,
+                profileIds: this.selectedProfile.id,
+                selectedAgentIds: this.selectedAgentIds.join(','),
+                topic: this.topic
+              }
+            })
+          })
+
+        Button('进入角色详情')
+          .width('100%')
+          .height(40)
+          .fontSize(Typography.size.body)
+          .fontColor(Colors.primary)
+          .backgroundColor(Colors.accentPurple)
+          .borderRadius(BorderRadius.huge)
+          .stateEffect(true)
+          .enabled(this.selectedProfile.id.length > 0)
+          .onClick(() => {
+            router.pushUrl({
+              url: 'pages/ProfileDetail',
+              params: {
+                profileId: this.selectedProfile.id,
+                selectedAgentIds: this.selectedAgentIds.join(',')
+              }
+            })
           })
       }
       .width('100%')
       .alignItems(HorizontalAlign.Start)
-      .padding(20)
-      .backgroundColor('#CC11131A')
-      .borderRadius(24)
-
-      if (this.messages.length > 0) {
-        ForEach(this.messages, (message: ArenaMessage) => {
-          Column({ space: 10 }) {
-            Row() {
-              Text(message.stageLabel)
-                .fontSize(12)
-                .fontColor(this.stanceColor(message.stance))
-              Blank()
-              Text(message.displayName)
-                .fontSize(11)
-                .fontColor('#667085')
-            }
-            .width('100%')
-
-            Text(message.content)
-              .fontSize(14)
-              .fontColor('#E7EBF4')
-              .lineHeight(22)
-          }
-          .width('100%')
-          .alignItems(HorizontalAlign.Start)
-          .padding(18)
-          .backgroundColor('#10131A')
-          .borderRadius(22)
-        }, (message: ArenaMessage) => message.id)
-      } else {
-        Column({ space: 10 }) {
-          Text('等待启动')
-            .fontSize(18)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#F6F8FF')
-
-          Text('这里承接 web 中间栏的对话流。点击“启动议会”后，会直接渲染 `/api/arena/run` 返回的 messages。')
-            .fontSize(13)
-            .fontColor('#98A2B3')
-            .lineHeight(20)
-        }
-        .width('100%')
-        .alignItems(HorizontalAlign.Start)
-        .padding(20)
-        .backgroundColor('#CC11131A')
-        .borderRadius(24)
-      }
+      .opacity(this.arenaBodyOpacity)
+      .translate({ y: this.arenaBodyY })
+      .animation({
+        duration: 440,
+        curve: Curve.Friction
+      })
     }
     .width('100%')
     .alignItems(HorizontalAlign.Start)
   }
 
   @Builder
-  buildSummaryTab() {
-    Column({ space: 16 }) {
-      Column({ space: 12 }) {
-        Text('EXPORT / SUMMARY')
-          .fontSize(12)
-          .fontColor('#00E5FF')
-          .letterSpacing(2)
-
-        Text('会议纪要与来源')
-          .fontSize(26)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#F6F8FF')
-
-        Text('这里承接 web 右栏的导出角色。当前先把 summary、推荐动作和源文档信息放进移动端纪要面板。')
-          .fontSize(13)
-          .fontColor('#98A2B3')
-          .lineHeight(20)
-      }
-      .width('100%')
-      .alignItems(HorizontalAlign.Start)
-      .padding(20)
-      .backgroundColor('#CC11131A')
-      .borderRadius(24)
-
-      if (this.sourceDocumentTitle.length > 0) {
-        Column({ space: 8 }) {
-          Text('SOURCE DOCUMENT')
-            .fontSize(12)
-            .fontColor('#9C5CFF')
-            .letterSpacing(2)
-
-          Text(this.sourceDocumentTitle)
-            .fontSize(18)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#F6F8FF')
-
-          if (this.sourceDocumentAuthor.length > 0) {
-            Text(this.sourceDocumentAuthor)
-              .fontSize(13)
-              .fontColor('#D6DCE7')
+  buildRecordsTab() {
+    Column() {
+      RecordsTab({
+        records: this.records,
+        onRecordClick: (record: RecordItem) => {
+          router.pushUrl({
+            url: 'pages/SummaryDetailPage',
+            params: { arenaRunId: record.id }
+          })
+        },
+        onGenerateCard: (record: RecordItem) => {
+          void this.handleGenerateShareCard(record)
+        },
+        onGenerateVideo: (_record: RecordItem) => {
+          try {
+            void promptAction.openToast({ message: '会议视频入口开发中，可先使用「生成卡片」或详情页导出' })
+          } catch (_e) {
           }
-
-          if (this.sourceDocumentMeta.length > 0) {
-            Text(this.sourceDocumentMeta)
-              .fontSize(12)
-              .fontColor('#98A2B3')
-          }
+        },
+        onShareRecord: (record: RecordItem) => {
+          router.pushUrl({
+            url: 'pages/SummaryDetailPage',
+            params: { arenaRunId: record.id, openSheet: 'share' }
+          })
+        },
+        onViewAll: () => {
+          router.pushUrl({ url: 'pages/SummaryListPage' })
         }
-        .width('100%')
-        .alignItems(HorizontalAlign.Start)
-        .padding(18)
-        .backgroundColor('#151025')
-        .borderRadius(22)
-      }
-
-      if (this.summaryTitle.length > 0) {
-        Column({ space: 12 }) {
-          Text(this.summaryTitle)
-            .fontSize(22)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#F6F8FF')
-
-          Text(this.consensus)
-            .fontSize(14)
-            .fontColor('#D6DCE7')
-            .lineHeight(22)
-
-          Text('主要分歧')
-            .fontSize(14)
-            .fontColor('#98A2B3')
-          ForEach(this.disagreements, (item: string) => {
-            Text(`• ${item}`)
-              .fontSize(13)
-              .fontColor('#E7EBF4')
-              .lineHeight(21)
-          }, (item: string) => item)
-
-          Text('行动建议')
-            .fontSize(14)
-            .fontColor('#98A2B3')
-          ForEach(this.actionableAdvice, (item: string) => {
-            Text(`• ${item}`)
-              .fontSize(13)
-              .fontColor('#E7EBF4')
-              .lineHeight(21)
-          }, (item: string) => item)
-
-          Text(`“${this.narrativeHook}”`)
-            .fontSize(13)
-            .fontColor('#D8C1FF')
-            .lineHeight(21)
-            .padding(14)
-            .backgroundColor('#191327')
-            .borderRadius(18)
-
-          Row({ space: 10 }) {
-            Button('回到议会')
-              .layoutWeight(1)
-              .height(42)
-              .backgroundColor('#00E5FF')
-              .fontColor('#041017')
-              .borderRadius(99)
-              .onClick(() => {
-                this.activeTab = 1
-              })
-
-            Button('换角色')
-              .layoutWeight(1)
-              .height(42)
-              .backgroundColor('#171B24')
-              .fontColor('#F6F8FF')
-              .borderRadius(99)
-              .onClick(() => {
-                this.activeTab = 0
-              })
-          }
-          .width('100%')
-        }
-        .width('100%')
-        .alignItems(HorizontalAlign.Start)
-        .padding(20)
-        .backgroundColor('#CC11131A')
-        .borderRadius(24)
-      } else {
-        Column({ space: 10 }) {
-          Text('暂无纪要')
-            .fontSize(18)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#F6F8FF')
-
-          Text('启动一次议会后，这里会直接显示 `/api/arena/run` 返回的 summary。')
-            .fontSize(13)
-            .fontColor('#98A2B3')
-            .lineHeight(20)
-        }
-        .width('100%')
-        .alignItems(HorizontalAlign.Start)
-        .padding(20)
-        .backgroundColor('#CC11131A')
-        .borderRadius(24)
-      }
+      })
     }
     .width('100%')
-    .alignItems(HorizontalAlign.Start)
-  }
-
-  @Builder
-  buildTabButton(label: string, caption: string, index: number) {
-    Button() {
-      Column({ space: 4 }) {
-        Text(label)
-          .fontSize(13)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(this.isActiveTab(index) ? '#041017' : '#E7EBF4')
-
-        Text(caption)
-          .fontSize(10)
-          .fontColor(this.isActiveTab(index) ? '#0B3B47' : '#667085')
-      }
-      .width('100%')
-      .height('100%')
-      .justifyContent(FlexAlign.Center)
-    }
-    .layoutWeight(1)
-    .height(56)
-    .backgroundColor(this.isActiveTab(index) ? '#00E5FF' : '#10131A')
-    .borderRadius(18)
-    .onClick(() => {
-      this.switchTab(index)
+    .opacity(this.recordsPaneOpacity)
+    .translate({ y: this.recordsPaneY })
+    .animation({
+      duration: 400,
+      curve: Curve.FastOutSlowIn
     })
   }
 
+  // 主构建方法
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
-      Column({ space: 16 }) {
-        Scroll() {
-          Column({ space: 16 }) {
-            this.buildHeroSection()
-            this.buildLoadingCard()
-            this.buildErrorCard()
+      // 背景装饰 - 多层次渐变背景
+      Stack() {
+        // 底层：基础渐变
+        Column()
+          .width('100%')
+          .height('100%')
+          .backgroundColor('#F8FAFC')
 
+        // 左上角主色光晕
+        Column()
+          .width(280)
+          .height(280)
+          .borderRadius(140)
+          .backgroundColor('#EEF2FF')
+          .blur(80)
+          .position({ x: -120, y: -80 })
+
+        // 左上角装饰圆
+        Column()
+          .width(120)
+          .height(120)
+          .borderRadius(60)
+          .backgroundColor('rgba(99, 102, 241, 0.12)')
+          .blur(40)
+          .position({ x: -30, y: 20 })
+
+        // 右上角靛蓝光晕
+        Column()
+          .width(320)
+          .height(320)
+          .borderRadius(160)
+          .backgroundColor('rgba(139, 92, 246, 0.08)')
+          .blur(100)
+          .position({ right: -120, y: 40 })
+
+        // 右上角装饰圆
+        Column()
+          .width(100)
+          .height(100)
+          .borderRadius(50)
+          .backgroundColor('rgba(165, 180, 252, 0.2)')
+          .blur(30)
+          .position({ right: 20, y: 100 })
+
+        // 底部玫瑰色光晕
+        Column()
+          .width(360)
+          .height(360)
+          .borderRadius(180)
+          .backgroundColor('rgba(254, 205, 211, 0.15)')
+          .blur(120)
+          .position({ left: -60, bottom: -100 })
+
+        // 底部第二个光晕
+        Column()
+          .width(200)
+          .height(200)
+          .borderRadius(100)
+          .backgroundColor('rgba(16, 185, 129, 0.06)')
+          .blur(60)
+          .position({ right: 40, bottom: 80 })
+
+        // 右上角小装饰
+        Column()
+          .width(60)
+          .height(60)
+          .borderRadius(30)
+          .backgroundColor('rgba(245, 158, 11, 0.1)')
+          .blur(20)
+          .position({ right: 60, y: 200 })
+      }
+      .width('100%')
+      .height('100%')
+
+      // 主内容区域
+      Column({ space: Spacing.md }) {
+        Scroll() {
+          Column({ space: Spacing.md }) {
+            // 头部
+            HeroSection({
+              selectedProfileName: this.selectedProfile.displayName,
+              connectionLabel: this.connectionLabel
+            })
+
+            // 加载状态
+            LoadingOverlay({
+              message: this.loading
+            })
+
+            // 错误提示
+            ErrorToast({
+              message: this.error,
+              onRetry: () => {
+                this.handleRetry()
+              }
+            })
+
+            // Tab 内容
             if (this.activeTab === 0) {
               this.buildRoleTab()
             } else if (this.activeTab === 1) {
               this.buildArenaTab()
             } else {
-              this.buildSummaryTab()
+              this.buildRecordsTab()
             }
           }
-          .padding({ left: 16, right: 16, top: 16, bottom: 112 })
+          .padding({
+            left: Spacing.page.horizontal,
+            right: Spacing.page.horizontal,
+            top: this.safeTopVp,
+            bottom: 80 + this.safeBottomVp
+          })
           .width('100%')
           .alignItems(HorizontalAlign.Start)
         }
         .layoutWeight(1)
         .scrollBar(BarState.Off)
+        .edgeEffect(EdgeEffect.Spring)
       }
       .width('100%')
       .height('100%')
       .alignItems(HorizontalAlign.Start)
-      .backgroundColor('#050508')
 
-      Row({ space: 10 }) {
-        this.buildTabButton('角色', 'ROLE', 0)
-        this.buildTabButton('议会', 'ARENA', 1)
-        this.buildTabButton('纪要', 'EXPORT', 2)
-      }
-      .width('100%')
-      .padding({ left: 16, right: 16, top: 12, bottom: 18 })
-      .backgroundColor('#F2050508')
-    }.width('100%')
+      // 底部导航
+      TabBar({
+        activeIndex: this.activeTab,
+        safeBottomVp: this.safeBottomVp,
+        onTabChange: (index: number) => {
+          this.switchTab(index)
+        }
+      })
+    }
+    .width('100%')
     .height('100%')
+    .backgroundColor(Colors.background)
   }
 }

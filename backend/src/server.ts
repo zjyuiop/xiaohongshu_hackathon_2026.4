@@ -2,7 +2,8 @@ import 'dotenv/config';
 
 import cors from 'cors';
 import express from 'express';
-import type { Request, Response } from 'express';
+import type { NextFunction, Request, Response } from 'express';
+import multer from 'multer';
 
 import { getConfig } from './config.js';
 import type {
@@ -13,19 +14,23 @@ import type {
   BuildAgentsRequest,
   MergeAgentsRequest,
   ParseTimelineRequest,
+  ProfileImportRequest,
 } from './domain.js';
 import { BackendRepository } from './repository.js';
 import {
   arenaPosterRequestSchema,
   arenaRunRequestSchema,
+  arenaSessionMessageRequestSchema,
   buildAgentsRequestSchema,
   mergeAgentsRequestSchema,
   parseTimelineRequestSchema,
+  profileImportRequestSchema,
 } from './schemas.js';
 import { runArena } from './services/arena.js';
 import { DefaultLibraryImporter } from './services/importer.js';
 import { buildAgents, mergeAgents } from './services/persona.js';
 import { generateArenaPoster } from './services/poster.js';
+import { importProfileFromUpload } from './services/profile-import.js';
 import { describeRuntime } from './services/runtime.js';
 import { parseTimeline } from './services/timeline.js';
 
@@ -39,7 +44,55 @@ app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 app.use('/generated', express.static(config.generatedDir));
 
-const activeArenaSessions = new Map<string, AbortController>();
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: config.profileImportMaxFileSizeBytes,
+  },
+});
+
+interface ActiveArenaSessionState {
+  sessionId: string;
+  controller?: AbortController;
+  queuedMessages: Array<{
+    id?: string;
+    content: string;
+    createdAt?: string;
+  }>;
+  lastTouchedAt: number;
+}
+
+const arenaSessions = new Map<string, ActiveArenaSessionState>();
+
+function getArenaSessionState(sessionId: string): ActiveArenaSessionState {
+  const existing = arenaSessions.get(sessionId);
+  if (existing) {
+    existing.lastTouchedAt = Date.now();
+    return existing;
+  }
+
+  const created: ActiveArenaSessionState = {
+    sessionId,
+    queuedMessages: [],
+    lastTouchedAt: Date.now(),
+  };
+  arenaSessions.set(sessionId, created);
+  return created;
+}
+
+function releaseArenaSessionState(sessionId: string): void {
+  const session = arenaSessions.get(sessionId);
+  if (!session) {
+    return;
+  }
+
+  if (session.controller || session.queuedMessages.length > 0) {
+    session.lastTouchedAt = Date.now();
+    return;
+  }
+
+  arenaSessions.delete(sessionId);
+}
 
 function resolveAbsoluteBaseUrl(request: Request): string {
   if (config.publicBaseUrl) {
@@ -186,6 +239,26 @@ app.post('/api/agents/build', async (request, response) => {
   }
 });
 
+app.post('/api/profile-imports', upload.single('file'), async (request, response) => {
+  const parsed = profileImportRequestSchema.safeParse(request.body);
+  if (!parsed.success) {
+    response.status(400).json({ error: parsed.error.flatten() });
+    return;
+  }
+
+  if (!request.file) {
+    response.status(400).json({ error: '缺少上传文件字段 file' });
+    return;
+  }
+
+  try {
+    const result = await importProfileFromUpload(repository, parsed.data as ProfileImportRequest, request.file);
+    response.json(result);
+  } catch (error) {
+    response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
 app.post('/api/agents/merge', async (request, response) => {
   const parsed = mergeAgentsRequestSchema.safeParse(request.body);
   if (!parsed.success) {
@@ -227,7 +300,8 @@ app.post('/api/arena/sessions/:sessionId/interrupt', async (request, response) =
       return;
     }
 
-    const controller = activeArenaSessions.get(sessionId);
+    const session = arenaSessions.get(sessionId);
+    const controller = session?.controller;
     if (!controller) {
       response.status(404).json({ error: `未找到正在运行的会话: ${sessionId}` });
       return;
@@ -243,6 +317,41 @@ app.post('/api/arena/sessions/:sessionId/interrupt', async (request, response) =
   }
 });
 
+app.post('/api/arena/sessions/:sessionId/messages', async (request, response) => {
+  const parsed = arenaSessionMessageRequestSchema.safeParse(request.body);
+  if (!parsed.success) {
+    response.status(400).json({ error: parsed.error.flatten() });
+    return;
+  }
+
+  try {
+    const sessionId = request.params.sessionId?.trim();
+    if (!sessionId) {
+      response.status(400).json({ error: '缺少 sessionId' });
+      return;
+    }
+
+    const session = getArenaSessionState(sessionId);
+    session.queuedMessages.push({
+      id: parsed.data.clientMessageId,
+      content: parsed.data.content.trim(),
+      createdAt: parsed.data.createdAt,
+    });
+
+    if (session.controller && !session.controller.signal.aborted) {
+      session.controller.abort(new Error('用户插入了新的消息'));
+    }
+
+    response.json({
+      ok: true,
+      sessionId,
+      queuedMessages: session.queuedMessages.length,
+    });
+  } catch (error) {
+    response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
 app.post('/api/arena/stream', async (request: Request, response: Response) => {
   const parsed = arenaRunRequestSchema.safeParse(request.body);
   if (!parsed.success) {
@@ -251,8 +360,9 @@ app.post('/api/arena/stream', async (request: Request, response: Response) => {
   }
 
   const sessionId = parsed.data.sessionId?.trim() || `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const session = getArenaSessionState(sessionId);
   const sessionController = new AbortController();
-  activeArenaSessions.set(sessionId, sessionController);
+  session.controller = sessionController;
 
   startSse(response);
 
@@ -285,11 +395,16 @@ app.post('/api/arena/stream', async (request: Request, response: Response) => {
   });
 
   try {
+    const queuedMessages = session.queuedMessages.splice(0);
     await runArena(
       repository,
       {
         ...(parsed.data as ArenaRunRequest),
         sessionId,
+        pendingUserMessages: [
+          ...queuedMessages,
+          ...((parsed.data as ArenaRunRequest).pendingUserMessages ?? []),
+        ],
       },
       {
         signal: sessionController.signal,
@@ -325,7 +440,10 @@ app.post('/api/arena/stream', async (request: Request, response: Response) => {
     }
   } finally {
     clearInterval(heartbeat);
-    activeArenaSessions.delete(sessionId);
+    if (session.controller === sessionController) {
+      session.controller = undefined;
+    }
+    releaseArenaSessionState(sessionId);
     if (!closed) {
       response.end();
     }
@@ -370,6 +488,27 @@ app.get('/api/admin/import-status', async (_request, response) => {
   } catch (error) {
     response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
   }
+});
+
+app.use((error: unknown, _request: Request, response: Response, _next: NextFunction) => {
+  if (error instanceof multer.MulterError) {
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      response.status(400).json({
+        error: `上传文件过大，当前上限为 ${Math.floor(config.profileImportMaxFileSizeBytes / 1024 / 1024)}MB`,
+      });
+      return;
+    }
+
+    response.status(400).json({ error: error.message });
+    return;
+  }
+
+  if (error instanceof Error) {
+    response.status(500).json({ error: error.message });
+    return;
+  }
+
+  response.status(500).json({ error: 'unknown server error' });
 });
 
 async function bootstrap(): Promise<void> {

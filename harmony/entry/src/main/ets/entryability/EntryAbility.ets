@@ -28,6 +28,22 @@ export default class EntryAbility extends UIAbility {
         return;
       }
       hilog.info(DOMAIN, 'testTag', 'Succeeded in loading the content.');
+
+      windowStage.getMainWindow().then((mainWindow: window.Window) => {
+        try {
+          mainWindow.setWindowLayoutFullScreen(true);
+          mainWindow.setWindowSystemBarProperties({
+            statusBarColor: '#00000000',
+            statusBarContentColor: '#FFFFFFFF',
+            navigationBarColor: '#00000000',
+            navigationBarContentColor: '#FFFFFFFF'
+          });
+        } catch (innerErr) {
+          hilog.error(DOMAIN, 'testTag', 'immersive window failed: %{public}s', JSON.stringify(innerErr));
+        }
+      }).catch((e: Error) => {
+        hilog.error(DOMAIN, 'testTag', 'getMainWindow failed: %{public}s', JSON.stringify(e));
+      });
     });
   }
 

@@ -1,0 +1,24 @@
+<svg width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="qin_bg" x1="28" y1="22" x2="126" y2="142" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F7D6C2"/>
+      <stop offset="1" stop-color="#D78B6A"/>
+    </linearGradient>
+    <linearGradient id="qin_robe" x1="80" y1="96" x2="80" y2="146" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2E313D"/>
+      <stop offset="1" stop-color="#191B24"/>
+    </linearGradient>
+  </defs>
+  <circle cx="80" cy="80" r="72" fill="url(#qin_bg)"/>
+  <path d="M38 145C44 114 60 98 80 98C100 98 116 114 122 145H38Z" fill="url(#qin_robe)"/>
+  <circle cx="80" cy="70" r="29" fill="#F2C19E"/>
+  <path d="M50 67C54 45 66 34 80 34C94 34 107 45 110 67C103 58 92 53 80 53C68 53 57 57 50 67Z" fill="#1F1F27"/>
+  <path d="M58 43H102V52C102 58 97 63 91 63H69C63 63 58 58 58 52V43Z" fill="#2C2B34"/>
+  <rect x="48" y="36" width="64" height="10" rx="5" fill="#D5A74C"/>
+  <rect x="54" y="28" width="8" height="20" rx="4" fill="#E7C36B"/>
+  <rect x="98" y="28" width="8" height="20" rx="4" fill="#E7C36B"/>
+  <path d="M68 76H75" stroke="#35241C" stroke-width="3" stroke-linecap="round"/>
+  <path d="M85 76H92" stroke="#35241C" stroke-width="3" stroke-linecap="round"/>
+  <path d="M74 88C78 90 82 90 86 88" stroke="#9E624C" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M69 104L80 95L91 104" stroke="#D5A74C" stroke-width="3" stroke-linecap="round"/>
+</svg>

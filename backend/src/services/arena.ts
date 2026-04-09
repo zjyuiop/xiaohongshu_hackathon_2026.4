@@ -28,6 +28,10 @@ function messageId(runId: string, index: number): string {
   return `${runId}-msg-${index + 1}`;
 }
 
+function userMessageId(runId: string, index: number): string {
+  return `${runId}-user-${index + 1}`;
+}
+
 function buildArenaLinks(runId: string): ArenaOutputLinks {
   return {
     runId,
@@ -553,6 +557,15 @@ function getRoundPlans(mode: ArenaRunRequest['mode'], roundCount: number) {
   return plans;
 }
 
+function estimateArenaRunTimeoutMs(participantCount: number, roundCount: number): number {
+  const estimated =
+    roundCount * participantCount * appConfig.arenaSpeakerTimeoutMs +
+    appConfig.arenaSummaryTimeoutMs +
+    30_000;
+
+  return Math.min(2_147_000_000, Math.max(appConfig.arenaRunTimeoutMs, estimated));
+}
+
 export async function runArena(
   repository: BackendRepository,
   input: ArenaRunRequest,
@@ -560,8 +573,7 @@ export async function runArena(
 ): Promise<ArenaRunResponse> {
   const participants = input.selectedAgentIds
     .map((agentId) => input.agents.find((agent) => agent.agentId === agentId))
-    .filter((agent): agent is PersonaSpec => Boolean(agent))
-    .slice(0, 3);
+    .filter((agent): agent is PersonaSpec => Boolean(agent));
 
   if (participants.length < 2) {
     throw new Error('至少需要 2 个 agent 才能开始讨论');
@@ -585,9 +597,10 @@ export async function runArena(
   const guidance = input.guidance?.trim();
   const timeoutController = new AbortController();
   const signal = timeoutController.signal;
+  const runTimeoutMs = estimateArenaRunTimeoutMs(participants.length, roundCount);
   const timeout = setTimeout(() => {
-    timeoutController.abort(new ArenaInterruptedError(`讨论执行超时（${appConfig.arenaRunTimeoutMs}ms）`));
-  }, appConfig.arenaRunTimeoutMs);
+    timeoutController.abort(new ArenaInterruptedError(`讨论执行超时（${runTimeoutMs}ms）`));
+  }, runTimeoutMs);
   const forwardAbort = () => {
     timeoutController.abort(options?.signal?.reason ?? new ArenaInterruptedError());
   };
@@ -633,7 +646,7 @@ export async function runArena(
 
     if (guidance) {
       const guidanceMessage: ArenaMessage = {
-        id: `${runId}-user-1`,
+        id: userMessageId(runId, transcript.length),
         kind: 'user',
         agentId: 'user',
         displayName: '你',
@@ -647,6 +660,33 @@ export async function runArena(
         round: 0,
         phase: 'opening',
         message: guidanceMessage,
+      });
+    }
+
+    const pendingUserMessages = (input.pendingUserMessages ?? [])
+      .map((item) => ({
+        id: item.id?.trim() || undefined,
+        content: item.content.trim(),
+        createdAt: item.createdAt,
+      }))
+      .filter((item) => item.content.length > 0);
+
+    for (const [index, pendingMessage] of pendingUserMessages.entries()) {
+      const nextMessage: ArenaMessage = {
+        id: pendingMessage.id ?? userMessageId(runId, transcript.length + index),
+        kind: 'user',
+        agentId: 'user',
+        displayName: '你',
+        stageLabel: '实时插话',
+        content: pendingMessage.content,
+        stance: 'neutral',
+      };
+      transcript = [...transcript, nextMessage];
+      await emit({
+        type: 'message',
+        round: 0,
+        phase: 'opening',
+        message: nextMessage,
       });
     }
 

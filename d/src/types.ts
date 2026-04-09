@@ -147,6 +147,12 @@ export interface MergeAgentsResponse {
   }
 }
 
+export interface PendingArenaUserMessageInput {
+  id?: string
+  content: string
+  createdAt?: string
+}
+
 export interface ArenaRunRequestPayload {
   topic: string
   mode: ArenaMode
@@ -156,8 +162,21 @@ export interface ArenaRunRequestPayload {
   roundCount?: number
   maxMessageChars?: number
   guidance?: string
+  pendingUserMessages?: PendingArenaUserMessageInput[]
   continueFromRunId?: string
   sessionId?: string
+}
+
+export interface ArenaSessionMessageRequestPayload {
+  content: string
+  clientMessageId?: string
+  createdAt?: string
+}
+
+export interface ArenaSessionMessageResponse {
+  ok: true
+  sessionId: string
+  queuedMessages: number
 }
 
 export interface ArenaRunHistoryItem {

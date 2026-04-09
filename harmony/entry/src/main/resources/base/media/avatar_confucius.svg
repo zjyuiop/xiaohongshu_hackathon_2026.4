@@ -1,0 +1,22 @@
+<svg width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="confucius_bg" x1="28" y1="18" x2="128" y2="142" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#EEE8FB"/>
+      <stop offset="1" stop-color="#C3B4EA"/>
+    </linearGradient>
+    <linearGradient id="confucius_robe" x1="80" y1="96" x2="80" y2="146" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6A5A7F"/>
+      <stop offset="1" stop-color="#4B3C5D"/>
+    </linearGradient>
+  </defs>
+  <circle cx="80" cy="80" r="72" fill="url(#confucius_bg)"/>
+  <path d="M37 145C43 116 58 100 80 100C102 100 117 116 123 145H37Z" fill="url(#confucius_robe)"/>
+  <circle cx="80" cy="70" r="28" fill="#F2C8A7"/>
+  <path d="M56 67C59 48 68 38 80 38C94 38 102 49 104 67C97 59 89 54 80 54C71 54 63 58 56 67Z" fill="#3A2E31"/>
+  <path d="M70 40C72 32 76 28 80 28C84 28 88 32 90 40H70Z" fill="#3A2E31"/>
+  <path d="M68 77H74" stroke="#52382E" stroke-width="3" stroke-linecap="round"/>
+  <path d="M86 77H92" stroke="#52382E" stroke-width="3" stroke-linecap="round"/>
+  <path d="M76 88C78 90 82 90 84 88" stroke="#AA7158" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M72 92C74 100 76 105 80 105C84 105 86 100 88 92" stroke="#3A2E31" stroke-width="3" stroke-linecap="round"/>
+  <path d="M67 102C72 115 75 126 80 126C85 126 88 115 93 102" fill="#F3F0E6" stroke="#3A2E31" stroke-width="3" stroke-linejoin="round"/>
+</svg>

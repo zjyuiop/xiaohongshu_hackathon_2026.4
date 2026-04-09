@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react'
 
 import './arena-studio.css'
 import {
@@ -13,6 +13,7 @@ import {
   mergeAgents as requestMergedAgent,
   parseTimeline,
   runArenaStream,
+  sendArenaSessionMessage,
 } from '../lib/api'
 import type {
   ArenaMessage,
@@ -23,6 +24,7 @@ import type {
   ArenaRun,
   ArenaRunHistoryItem,
   ArenaStreamEvent,
+  PendingArenaUserMessageInput,
   PersonaSpec,
   PresetProfile,
   TimelineNode,
@@ -77,6 +79,14 @@ function upsertDraft(drafts: LiveDraft[], nextDraft: LiveDraft): LiveDraft[] {
   const nextDrafts = [...drafts]
   nextDrafts[existingIndex] = nextDraft
   return nextDrafts
+}
+
+function mergeMessages(baseMessages: ArenaMessage[], extraMessages: ArenaMessage[]): ArenaMessage[] {
+  return extraMessages.reduce((messages, message) => upsertMessage(messages, message), [...baseMessages])
+}
+
+function removeMessage(messages: ArenaMessage[], messageId: string): ArenaMessage[] {
+  return messages.filter((message) => message.id !== messageId)
 }
 
 function formatTimestamp(value?: string): string {
@@ -448,7 +458,9 @@ function StreamPanel({
   maxMessageChars,
   setMaxMessageChars,
   guidance,
+  chatInput,
   setGuidance,
+  setChatInput,
   statusLabel,
   phaseLabel,
   error,
@@ -464,6 +476,7 @@ function StreamPanel({
   onStart,
   onContinue,
   onInterrupt,
+  onSendMessage,
   onToggleAgent,
 }: {
   displayAgents: PersonaSpec[]
@@ -476,7 +489,9 @@ function StreamPanel({
   maxMessageChars: number
   setMaxMessageChars: (value: number) => void
   guidance: string
+  chatInput: string
   setGuidance: (value: string) => void
+  setChatInput: (value: string) => void
   statusLabel: string
   phaseLabel: string
   error: string
@@ -492,6 +507,7 @@ function StreamPanel({
   onStart: () => void
   onContinue: () => void
   onInterrupt: (resumeAfterInterrupt?: boolean) => void
+  onSendMessage: () => void
   onToggleAgent: (agentId: string) => void
 }) {
   const messageViewportRef = useRef<HTMLDivElement | null>(null)
@@ -512,6 +528,15 @@ function StreamPanel({
   }, [currentRun?.runId, liveDrafts, liveSummaryText, streamMessages, streaming])
 
   const messageCount = streamMessages.length + liveDrafts.length
+
+  function handleComposerKeyDown(event: ReactKeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== 'Enter' || event.shiftKey) {
+      return
+    }
+
+    event.preventDefault()
+    onSendMessage()
+  }
 
   return (
     <section className="studio-main">
@@ -610,7 +635,6 @@ function StreamPanel({
                   <label className="numeric-control">
                     <span>轮数</span>
                     <input
-                      max={20}
                       min={1}
                       type="number"
                       value={roundCount}
@@ -730,51 +754,44 @@ function StreamPanel({
             <div className="intervention-dock">
               <div className="intervention-head">
                 <div>
-                  <p className="eyebrow">Manual Steer</p>
-                  <strong>人工介入</strong>
+                  <p className="eyebrow">Live Composer</p>
+                  <strong>像聊天一样插话</strong>
                 </div>
                 <span className={`status-pill ${streaming ? 'is-live' : currentRun?.status === 'interrupted' ? 'is-paused' : 'is-done'}`}>
-                  {streaming ? '可中途打断' : currentRun?.status === 'interrupted' ? '可续聊' : '待下一轮'}
+                  {streaming ? '发送后会立即打断并续聊' : currentRun?.status === 'interrupted' ? '可直接继续追问' : '可继续补充'}
                 </span>
               </div>
 
               <textarea
                 className="guidance-textarea guidance-textarea-inline"
-                placeholder="需要人工介入时，在这里输入新的 steer。点击后会先打断当前讨论，再基于当前结果继续。"
-                value={guidance}
-                onChange={(event) => setGuidance(event.target.value)}
+                placeholder="直接输入你想补充的问题、质疑或新要求。Enter 发送，Shift+Enter 换行。"
+                value={chatInput}
+                onChange={(event) => setChatInput(event.target.value)}
+                onKeyDown={handleComposerKeyDown}
               />
 
               <div className="intervention-actions">
-                {streaming ? (
-                  <>
-                    <button
-                      className="action-button action-button-primary"
-                      disabled={interrupting || !activeSessionId || !guidance.trim()}
-                      onClick={() => onInterrupt(true)}
-                      type="button"
-                    >
-                      {interrupting ? '等待停下...' : '打断并按引导继续'}
-                    </button>
-                    <button
-                      className="action-button action-button-danger"
-                      disabled={interrupting || !activeSessionId}
-                      onClick={() => onInterrupt(false)}
-                      type="button"
-                    >
-                      只打断
-                    </button>
-                  </>
-                ) : (
-                  <button className="action-button action-button-primary" disabled={!currentRun} onClick={onContinue} type="button">
-                    {currentRun?.status === 'interrupted' ? '继续这场讨论' : '基于当前结果继续'}
-                  </button>
-                )}
+                <button
+                  className="action-button action-button-primary"
+                  disabled={!chatInput.trim() || (!streaming && !currentRun)}
+                  onClick={onSendMessage}
+                  type="button"
+                >
+                  {streaming ? '发送并实时插入' : '发送并继续'}
+                </button>
+                <button
+                  className="action-button action-button-danger"
+                  disabled={!streaming || interrupting || !activeSessionId}
+                  onClick={() => onInterrupt(false)}
+                  type="button"
+                >
+                  {interrupting ? '正在打断...' : '只打断'}
+                </button>
 
                 <span className="intervention-hint">
                   {streaming
-                    ? '聊天页内可直接打断；有 steer 时会在安全中断后自动续聊。'
-                    : '当前未流式生成。需要续聊时，这里的 steer 会作为新的实时引导插入。'}
+                    ? '发送后会先安全打断当前生成，再把你的消息插入 transcript 并自动续跑。'
+                    : '当前未流式生成。发送后会基于当前结果继续一轮，保持聊天流不断开。'}
                 </span>
               </div>
             </div>
@@ -863,6 +880,7 @@ export default function ArenaStudio() {
   const [roundCount, setRoundCount] = useState(3)
   const [maxMessageChars, setMaxMessageChars] = useState(180)
   const [guidance, setGuidance] = useState('')
+  const [chatInput, setChatInput] = useState('')
   const [showImportForm, setShowImportForm] = useState(false)
   const [leftSidebarTab, setLeftSidebarTab] = useState<LeftSidebarTab>('sources')
   const [importName, setImportName] = useState('')
@@ -892,6 +910,8 @@ export default function ArenaStudio() {
   const [activeCenterView, setActiveCenterView] = useState<CenterView>('setup')
   const streamAbortRef = useRef<AbortController | null>(null)
   const autoResumeAfterInterruptRef = useRef(false)
+  const pendingOptimisticUserMessagesRef = useRef<Map<string, ArenaMessage>>(new Map())
+  const queuedContinueMessagesRef = useRef<PendingArenaUserMessageInput[]>([])
 
   const allProfiles = [...presets, ...customProfiles]
   const libraryAgents = Object.values(loadedCharacters).flatMap((bundle) => bundle.agents)
@@ -899,6 +919,33 @@ export default function ArenaStudio() {
   const mergeCandidates = allArenaAgents
   const selectedAgents = allArenaAgents.filter((agent) => selectedAgentIds.includes(agent.agentId))
   const displayAgents = selectedAgents.length > 0 ? selectedAgents : currentRun?.participants ?? []
+
+  function buildOptimisticUserMessage(content: string): ArenaMessage {
+    const id = `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    return {
+      id,
+      kind: 'user',
+      agentId: 'user',
+      displayName: '你',
+      stageLabel: streaming ? '实时插话' : '继续追问',
+      content,
+      stance: 'neutral',
+    }
+  }
+
+  function rememberOptimisticUserMessage(message: ArenaMessage) {
+    pendingOptimisticUserMessagesRef.current.set(message.id, message)
+    setStreamMessages((current) => upsertMessage(current, message))
+  }
+
+  function clearOptimisticUserMessage(messageId: string) {
+    pendingOptimisticUserMessagesRef.current.delete(messageId)
+    setStreamMessages((current) => removeMessage(current, messageId))
+  }
+
+  function mergeWithPendingOptimisticMessages(messages: ArenaMessage[]): ArenaMessage[] {
+    return mergeMessages(messages, Array.from(pendingOptimisticUserMessagesRef.current.values()))
+  }
 
   useEffect(() => {
     void (async () => {
@@ -994,9 +1041,6 @@ export default function ArenaStudio() {
       if (current.includes(agentId)) {
         return current.filter((id) => id !== agentId)
       }
-      if (current.length >= 3) {
-        return [...current.slice(1), agentId]
-      }
       return [...current, agentId]
     })
   }
@@ -1080,8 +1124,7 @@ export default function ArenaStudio() {
 
       setMergedAgents((current) => dedupePersonas([response.agent, ...current]))
       setSelectedAgentIds((current) => {
-        const next = [...current.filter((id) => id !== response.agent.agentId), response.agent.agentId]
-        return next.length <= 3 ? next : next.slice(next.length - 3)
+        return [...current.filter((id) => id !== response.agent.agentId), response.agent.agentId]
       })
       setMergeDisplayName('')
       setMergePrompt('')
@@ -1154,6 +1197,9 @@ export default function ArenaStudio() {
         setPhaseLabel(`第 ${event.round} 轮 · ${getPhaseLabel(event.phase)} · ${event.displayName} 已发完`)
         break
       case 'message':
+        if (event.message.kind === 'user') {
+          pendingOptimisticUserMessagesRef.current.delete(event.message.id)
+        }
         setLiveDrafts((current) => current.filter((draft) => draft.id !== event.message.id))
         setStreamMessages((current) => upsertMessage(current, event.message))
         break
@@ -1175,7 +1221,7 @@ export default function ArenaStudio() {
 
         setCurrentRun(event.result)
         setCurrentLinks(event.links)
-        setStreamMessages(event.result.messages)
+        setStreamMessages(mergeWithPendingOptimisticMessages(event.result.messages))
         setLiveDrafts([])
         setLiveSummaryText('')
         setStreaming(false)
@@ -1241,6 +1287,8 @@ export default function ArenaStudio() {
     }
 
     setError('')
+    const pendingUserMessages = [...queuedContinueMessagesRef.current]
+    queuedContinueMessagesRef.current = []
     setPosterResponse(null)
     setStreaming(true)
     setInterrupting(false)
@@ -1250,7 +1298,9 @@ export default function ArenaStudio() {
     setPhaseLabel('即将开场')
     setActiveCenterView('chat')
     setCurrentRun((previous) => (continueFromCurrent ? continuedRun ?? previous : null))
-    setStreamMessages(continueFromCurrent && continuedRun ? [...continuedRun.messages] : [])
+    setStreamMessages(
+      mergeWithPendingOptimisticMessages(continueFromCurrent && continuedRun ? [...continuedRun.messages] : []),
+    )
 
     streamAbortRef.current?.abort()
     const controller = new AbortController()
@@ -1266,6 +1316,7 @@ export default function ArenaStudio() {
           roundCount,
           maxMessageChars,
           guidance: guidance.trim() || undefined,
+          pendingUserMessages: pendingUserMessages.length > 0 ? pendingUserMessages : undefined,
           continueFromRunId: continueFromCurrent ? continuedRun?.runId : undefined,
           sessionId: continueFromCurrent ? continuedRun?.sessionId : undefined,
         },
@@ -1277,6 +1328,9 @@ export default function ArenaStudio() {
     } catch (caughtError) {
       if (controller.signal.aborted) {
         return
+      }
+      if (pendingUserMessages.length > 0) {
+        queuedContinueMessagesRef.current = [...pendingUserMessages, ...queuedContinueMessagesRef.current]
       }
       setError(caughtError instanceof Error ? caughtError.message : '讨论失败')
       setStreaming(false)
@@ -1306,6 +1360,71 @@ export default function ArenaStudio() {
       setInterrupting(false)
       setError(caughtError instanceof Error ? caughtError.message : '中断失败')
     }
+  }
+
+  async function handleSendChatMessage() {
+    const content = chatInput.trim()
+    if (!content) {
+      return
+    }
+
+    const optimisticMessage = buildOptimisticUserMessage(content)
+    const pendingUserMessage: PendingArenaUserMessageInput = {
+      id: optimisticMessage.id,
+      content,
+      createdAt: new Date().toISOString(),
+    }
+
+    rememberOptimisticUserMessage(optimisticMessage)
+    setChatInput('')
+    setError('')
+    setActiveCenterView('chat')
+
+    if (streaming) {
+      if (!activeSessionId) {
+        clearOptimisticUserMessage(optimisticMessage.id)
+        setChatInput(content)
+        setError('会话尚未建立，暂时不能插入新消息')
+        return
+      }
+
+      autoResumeAfterInterruptRef.current = true
+      setInterrupting(true)
+      setPhaseLabel('收到你的消息，正在打断当前生成并续聊')
+
+      try {
+        await sendArenaSessionMessage(activeSessionId, {
+          content,
+          clientMessageId: optimisticMessage.id,
+          createdAt: pendingUserMessage.createdAt,
+        })
+      } catch (caughtError) {
+        autoResumeAfterInterruptRef.current = false
+        setInterrupting(false)
+        clearOptimisticUserMessage(optimisticMessage.id)
+        setChatInput(content)
+        setError(caughtError instanceof Error ? caughtError.message : '发送插话失败')
+      }
+      return
+    }
+
+    const payload = resolveRunPayload(currentRun)
+    if (!payload) {
+      clearOptimisticUserMessage(optimisticMessage.id)
+      setChatInput(content)
+      setError('至少选择两个阶段人格，或者先载入一场可继续的历史讨论')
+      return
+    }
+
+    if (!topic.trim()) {
+      clearOptimisticUserMessage(optimisticMessage.id)
+      setChatInput(content)
+      setError('请先填写议题')
+      return
+    }
+
+    queuedContinueMessagesRef.current = [...queuedContinueMessagesRef.current, pendingUserMessage]
+    void startArena(Boolean(currentRun), currentRun)
   }
 
   async function handleLoadRun(runId: string) {
@@ -1468,6 +1587,7 @@ export default function ArenaStudio() {
       <StreamPanel
         arenaMode={arenaMode}
         activeSessionId={activeSessionId}
+        chatInput={chatInput}
         currentRun={currentRun}
         displayAgents={displayAgents}
         error={error}
@@ -1480,14 +1600,16 @@ export default function ArenaStudio() {
         onChangeCenterView={setActiveCenterView}
         onContinue={() => void startArena(true)}
         onInterrupt={(resumeAfterInterrupt) => void handleInterrupt(resumeAfterInterrupt)}
+        onSendMessage={() => void handleSendChatMessage()}
         onStart={() => void startArena(false)}
         onToggleAgent={toggleAgent}
         phaseLabel={phaseLabel}
         roundCount={roundCount}
         setArenaMode={setArenaMode}
+        setChatInput={setChatInput}
         setGuidance={setGuidance}
         setMaxMessageChars={(value) => setMaxMessageChars(Math.max(60, Math.min(500, value)))}
-        setRoundCount={(value) => setRoundCount(Math.max(1, Math.min(20, value)))}
+        setRoundCount={(value) => setRoundCount(Math.max(1, value))}
         setTopic={setTopic}
         statusLabel={getStatusLabel(currentRun, streaming, interrupting)}
         streamMessages={streamMessages}

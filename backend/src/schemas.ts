@@ -56,6 +56,13 @@ export const buildAgentsRequestSchema = z.object({
   nodes: z.array(timelineNodeSchema).min(1),
 });
 
+export const profileImportRequestSchema = z.object({
+  importType: z.enum(['manual', 'wechat', 'chat']),
+  profileId: z.string().trim().min(1).max(120).optional(),
+  displayNameHint: z.string().trim().min(1).max(60).optional(),
+  title: z.string().trim().min(1).max(120).optional(),
+});
+
 export const mergeAgentsRequestSchema = z
   .object({
     primary: personaSpecSchema,
@@ -68,15 +75,28 @@ export const mergeAgentsRequestSchema = z
     path: ['secondary'],
   });
 
+export const arenaPendingUserMessageSchema = z.object({
+  id: z.string().trim().min(1).max(120).optional(),
+  content: z.string().trim().min(1).max(4000),
+  createdAt: z.string().trim().min(1).max(80).optional(),
+});
+
+export const arenaSessionMessageRequestSchema = z.object({
+  content: z.string().trim().min(1).max(4000),
+  clientMessageId: z.string().trim().min(1).max(120).optional(),
+  createdAt: z.string().trim().min(1).max(80).optional(),
+});
+
 export const arenaRunRequestSchema = z.object({
   topic: z.string().min(1),
   mode: z.enum(['chat', 'debate']),
-  selectedAgentIds: z.array(z.string().min(1)).min(2).max(3),
+  selectedAgentIds: z.array(z.string().min(1)).min(2),
   agents: z.array(personaSpecSchema).min(2),
   reasoningEffort: reasoningEffortSchema.optional(),
-  roundCount: z.number().int().min(1).max(20).optional(),
+  roundCount: z.number().int().min(1).optional(),
   maxMessageChars: z.number().int().min(60).max(500).optional(),
   guidance: z.string().trim().min(1).max(1000).optional(),
+  pendingUserMessages: z.array(arenaPendingUserMessageSchema).optional(),
   continueFromRunId: z.string().min(1).optional(),
   sessionId: z.string().min(1).optional(),
 });
@@ -229,8 +249,7 @@ export const generatedDebateJudgeSchema = generatedArenaSummarySchema.extend({
           comments: z.string().min(10),
         }),
       )
-      .min(2)
-      .max(3),
+      .min(2),
   }),
 });
 
@@ -438,7 +457,6 @@ export const generatedDebateJudgeJsonSchema = {
         scorecards: {
           type: 'array',
           minItems: 2,
-          maxItems: 3,
           items: {
             type: 'object',
             properties: {

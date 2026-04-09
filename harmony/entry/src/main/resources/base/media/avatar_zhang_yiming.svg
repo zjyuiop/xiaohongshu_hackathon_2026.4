@@ -1,0 +1,21 @@
+<svg width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="zhang_bg" x1="28" y1="18" x2="128" y2="142" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#DFF8F7"/>
+      <stop offset="1" stop-color="#8BD6E3"/>
+    </linearGradient>
+    <linearGradient id="zhang_jacket" x1="80" y1="96" x2="80" y2="146" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2C5368"/>
+      <stop offset="1" stop-color="#203847"/>
+    </linearGradient>
+  </defs>
+  <circle cx="80" cy="80" r="72" fill="url(#zhang_bg)"/>
+  <path d="M38 145C44 117 58 100 80 100C102 100 116 117 122 145H38Z" fill="url(#zhang_jacket)"/>
+  <circle cx="80" cy="72" r="29" fill="#EFC3A7"/>
+  <path d="M53 68C56 48 67 38 80 38C94 38 104 47 107 68C100 60 90 56 80 56C70 56 60 59 53 68Z" fill="#202D3B"/>
+  <path d="M63 50C70 44 79 43 90 46C83 40 72 39 63 44V50Z" fill="#304253"/>
+  <path d="M68 78H74" stroke="#52382E" stroke-width="3" stroke-linecap="round"/>
+  <path d="M86 78H92" stroke="#52382E" stroke-width="3" stroke-linecap="round"/>
+  <path d="M74 91C77 93 83 93 86 91" stroke="#A76C56" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M62 112C67 105 73 101 80 101C87 101 93 105 98 112" stroke="#9EDDE9" stroke-width="4" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,21 @@
+<svg width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="musk_bg" x1="28" y1="18" x2="128" y2="142" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#DFF8F5"/>
+      <stop offset="1" stop-color="#78CFC7"/>
+    </linearGradient>
+    <linearGradient id="musk_jacket" x1="80" y1="96" x2="80" y2="146" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#25354F"/>
+      <stop offset="1" stop-color="#162235"/>
+    </linearGradient>
+  </defs>
+  <circle cx="80" cy="80" r="72" fill="url(#musk_bg)"/>
+  <path d="M38 145C44 116 58 100 80 100C102 100 116 116 122 145H38Z" fill="url(#musk_jacket)"/>
+  <circle cx="80" cy="71" r="29" fill="#F1C5A8"/>
+  <path d="M54 68C56 47 67 36 80 36C96 36 106 48 107 71C101 61 91 57 80 57C69 57 60 60 54 68Z" fill="#43454E"/>
+  <path d="M60 58C66 47 76 42 89 44C80 39 68 40 60 48V58Z" fill="#5A5E68"/>
+  <path d="M68 77H74" stroke="#50352B" stroke-width="3" stroke-linecap="round"/>
+  <path d="M86 77H92" stroke="#50352B" stroke-width="3" stroke-linecap="round"/>
+  <path d="M73 90C77 92 83 92 87 90" stroke="#AA7059" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M65 109L80 98L95 109" fill="#FFFFFF"/>
+</svg>
